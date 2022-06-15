@@ -1,16 +1,24 @@
-name: 'JavaScript Action Template'
-
-description: 'Add description here'
-
+name: 'restore-cache'
+description: 'Download a cache and place the files in the provided paths'
 inputs:
-  input-1:
-    description: 'Add a description here'
+  path:
+    description: 'A list of files, directories, and wildcard patterns to restore'
     required: true
-
+  key:
+    description: 'An explicit key for restoring and saving the cache'
+    required: true
+  restore-keys:
+    description: 'An ordered list of keys to use for restoring stale cache if no cache hit occurred for key. Note `cache-hit` returns false in this case.'
+    required: false
+  required:
+    description: 'Flag indicating whether the action should fail on a cache miss'
+    required: false
+    default: 'false'
 outputs:
-  output-1:
-    description: 'Add a description here'
-
+  cache-hit:
+    description: 'Flag indicating whether an exact match was found for the cache key'
+  primary-key:
+    description: 'The primary key that should be used when saving the cache.'
 runs:
   using: 'node12'
-  main: 'dist/index.js'
+  main: './dist/index.js'

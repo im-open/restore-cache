@@ -1,6 +1,10 @@
-# javascript-action-template
+# restore-cache
 
-This template can be used to quickly start a new custom js action repository.  Click the `Use this template` button at the top to get started.
+This is a fork of [martijnhols/actions-cache] at version 3.0.4 but only contains a slimmed down version of the [restore] action.  
+
+This action will restore a cache but will not save the cache in a post-job step. 
+
+If you need an action that saves a cache, check out the official [actions/cache] action.
 
 ## Index
 
@@ -13,75 +17,85 @@ This template can be used to quickly start a new custom js action repository.  C
 - [Code of Conduct](#code-of-conduct)
 - [License](#license)
 
-## TODOs
-- Readme
-  - [ ] Update the Inputs section with the correct action inputs
-  - [ ] Update the Outputs section with the correct action outputs
-  - [ ] Update the Usage Example section with the correct usage   
-- package.json
-  - [ ] Update the `name` with the new action value
-- src/main.js
-  - [ ] Implement your custom javascript action
-- action.yml
-  - [ ] Fill in the correct name, description, inputs and outputs
-- .prettierrc.json
-  - [ ] Update any preferences you might have
-- CODEOWNERS
-  - [ ] Update as appropriate
-- Repository Settings
-  - [ ] On the *Options* tab check the box to *Automatically delete head branches*
-  - [ ] On the *Options* tab update the repository's visibility (must be done by an org owner)
-  - [ ] On the *Branches* tab add a branch protection rule
-    - [ ] Check *Require pull request reviews before merging*
-    - [ ] Check *Dismiss stale pull request approvals when new commits are pushed*
-    - [ ] Check *Require review from Code Owners*
-    - [ ] Check *Include Administrators*
-  - [ ] On the *Manage Access* tab add the appropriate groups
-- About Section (accessed on the main page of the repo, click the gear icon to edit)
-  - [ ] The repo should have a short description of what it is for
-  - [ ] Add one of the following topic tags:
-    | Topic Tag       | Usage                                    |
-    | --------------- | ---------------------------------------- |
-    | az              | For actions related to Azure             |
-    | code            | For actions related to building code     |
-    | certs           | For actions related to certificates      |
-    | db              | For actions related to databases         |
-    | git             | For actions related to Git               |
-    | iis             | For actions related to IIS               |
-    | microsoft-teams | For actions related to Microsoft Teams   |
-    | svc             | For actions related to Windows Services  |
-    | jira            | For actions related to Jira              |
-    | meta            | For actions related to running workflows |
-    | pagerduty       | For actions related to PagerDuty         |
-    | test            | For actions related to testing           |
-    | tf              | For actions related to Terraform         |
-  - [ ] Add any additional topics for an action if they apply    
-  - [ ] The Packages and Environments boxes can be unchecked
-
-  
 ## Inputs
-| Parameter | Is Required | Default | Description           |
-| --------- | ----------- | ------- | --------------------- |
-| `input`   | true        |         | Description goes here |
+
+| Parameter      | Is Required | Description                                                                                                                             |
+| -------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`         | true        | The list of files, directories and wildcard patterns that were used when saving the cache.                                              |
+| `key`          | true        | The key for the cache to check.                                                                                                         |
+| `restore-keys` | true        | An ordered list of keys to use for restoring stale cache if no cache hit occurred for key. Note `cache-hit` returns false in this case. |
+| `required`     | false       | Flag indicating whether the action should fail on a cache miss.  Defaults to `false`.                                                   |
 
 ## Outputs
-| Output   | Description           | Possible Values |
-| -------- | --------------------- | --------------- |
-| `output` | Description goes here |                 |
+
+| Output        | Description                                                        | Possible Values |
+| ------------- | ------------------------------------------------------------------ | --------------- |
+| `cache-hit`   | Flag indicating whether an exact match was found for the cache key | `true,false`    |
+| `primary-key` | The primary key that should be used when saving the cache.         |                 |
 
 ## Usage Examples
 
 ```yml
-jobs:
-  jobname:
-    runs-on: ubuntu-20.04
-    steps:
-      - uses: actions/checkout@v2
 
-      - name: ''
-        uses: im-open/thisrepo@v1.0.0 # TODO:  fix the action name
+jobs:
+  setup-caches:
+    runs-on: ubuntu-20.04
+    outputs:
+      NPM_CACHE_KEY: ${{ env.NPM_CACHE_KEY }}
+      HAS_NPM_CACHE: ${{ steps.has-npm-cache.outputs.cache-hit }}
+      
+    steps:
+      - uses: actions/checkout@v3
+        
+      - name: Set Cache Keys
+        run: echo "NPM_CACHE_KEY=node_modules-${{ hashFiles('package-lock.json', '**/package-lock.json') }}" >> $GITHUB_ENV
+          
+      - name: Check for an npm cache
+        id: has-npm-cache
+        uses: im-open/check-for-cache@v1.0.0
         with:
-          input: ''
+          paths:  '**/node_modules'
+          key: ${{ env.NPM_CACHE_KEY }}
+      
+  create-npm-cache:
+    runs-on: ubuntu-20.04
+    needs: [ setup-caches ]
+    if: needs.setup-caches.outputs.HAS_NPM_CACHE == 'false'
+    steps:
+      - uses: actions/checkout@v3
+        
+      # This action will upload the node_modules dir to the cache if the job completes successfully.
+      # Subsequent jobs/workflow runs can use this cached copy if the package-lock.json hasn't changed
+      # and they are also using a ubuntu-20.04 runner to restore the cache from.
+      - name: Setup caching for node_modules directory
+        uses: actions/cache@v2
+        id: module-cache
+        with:
+          key: ${{ needs.set-cache-keys.outputs.NPM_MODULES_CACHE_KEY }}
+          path: '**/node_modules'
+
+      - run: npm ci
+  
+  jest:
+    runs-on: ubuntu-20.04
+    needs: [ setup-caches, create-npm-cache ]
+    steps:
+      - uses: actions/checkout@v3
+        
+      - name: Download the node_modules folder from the cache
+        id: get-cached-node-modules
+        uses: im-open/restore-cache@v1.0.0
+        with:
+          key: ${{ needs.set-cache-keys.outputs.NPM_MODULES_CACHE_KEY }}
+          path: '**/node_modules'
+
+      - name: Rebuild Node Modules
+        run: npm rebuild
+
+      - name: jest test with coverage
+        run: npm test -- --json --outputFile=jest-results.json --coverage
+      
+    
 ```
 
 ## Contributing
@@ -104,8 +118,7 @@ npm run build
 npm run bundle
 ```
 
-These commands utilize [esbuild](https://esbuild.github.io/getting-started/#bundling-for-node) to bundle the action and
-its dependencies into a single file located in the `dist` folder.
+These commands utilize [ncc](https://github.com/vercel/ncc) to bundle the action and its dependencies into a single file located in the `dist` folder.
 
 ### Incrementing the Version
 
@@ -127,3 +140,6 @@ This project has adopted the [im-open's Code of Conduct](https://github.com/im-o
 Copyright &copy; 2022, Extend Health, LLC. Code released under the [MIT license](LICENSE).
 
 [git-version-lite]: https://github.com/im-open/git-version-lite
+[actions/cache]: https://github.com/actions/cache
+[restore]: https://github.com/MartijnHols/actions-cache/blob/main/restore/action.yml
+[martijnhols/actions-cache]: https://github.com/MartijnHols/actions-cache
