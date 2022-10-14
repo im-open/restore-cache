@@ -52,7 +52,7 @@ jobs:
           
       - name: Check for an npm cache
         id: has-npm-cache
-        uses: im-open/check-for-cache@v1.0.0
+        uses: im-open/check-for-cache@v1.1.0
         with:
           paths:  '**/node_modules'
           key: ${{ env.NPM_CACHE_KEY }}
@@ -84,7 +84,7 @@ jobs:
         
       - name: Download the node_modules folder from the cache
         id: get-cached-node-modules
-        uses: im-open/restore-cache@v1.0.1
+        uses: im-open/restore-cache@v1.1.0
         with:
           key: ${{ needs.set-cache-keys.outputs.NPM_MODULES_CACHE_KEY }}
           path: '**/node_modules'
