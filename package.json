@@ -11,7 +11,7 @@
   "keywords": [],
   "license": "ISC",
   "dependencies": {
-    "@actions/core": "^1.2.6",
+    "@actions/core": "^1.10.0",
     "@actions/exec": "^1.0.1",
     "@actions/io": "^1.1.0",
     "@martijnhols/actions-cache": "^1.1.3"
