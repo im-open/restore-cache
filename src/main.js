@@ -15,13 +15,19 @@ function isExactKeyMatch(key, cacheKey) {
 
 async function run() {
   try {
-    const primaryKey = core.getInput('key', { required: true });
+    // When used, this requiredArgOptions will cause the action to error if a value has not been provided.
+    const requiredArgOptions = {
+      required: true,
+      trimWhitespace: true
+    };
+
+    const primaryKey = core.getInput('key', requiredArgOptions);
     core.saveState('CACHE_KEY', primaryKey);
     core.setOutput('primary-key', primaryKey);
 
     const restoreKeys = getInputAsArray('restore-keys', null);
-    const cachePaths = getInputAsArray('path', { required: true });
-    const isCacheRequired = core.getInput('required', { required: false }) === 'true';
+    const cachePaths = getInputAsArray('path', requiredArgOptions);
+    const isCacheRequired = core.getBooleanInput('required');
 
     try {
       const cacheKey = await cache.restoreCache(cachePaths, primaryKey, restoreKeys);

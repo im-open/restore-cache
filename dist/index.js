@@ -70912,17 +70912,23 @@ PERFORMANCE OF THIS SOFTWARE.
 
     async function run() {
       try {
-        const primaryKey = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('key', {
-          required: true
-        });
+        // When used, this requiredArgOptions will cause the action to error if a value has not been provided.
+        const requiredArgOptions = {
+          required: true,
+          trimWhitespace: true
+        };
+
+        const primaryKey = _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput(
+          'key',
+          requiredArgOptions
+        );
         _actions_core__WEBPACK_IMPORTED_MODULE_0__.saveState('CACHE_KEY', primaryKey);
         _actions_core__WEBPACK_IMPORTED_MODULE_0__.setOutput('primary-key', primaryKey);
 
         const restoreKeys = getInputAsArray('restore-keys', null);
-        const cachePaths = getInputAsArray('path', { required: true });
+        const cachePaths = getInputAsArray('path', requiredArgOptions);
         const isCacheRequired =
-          _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('required', { required: false }) ===
-          'true';
+          _actions_core__WEBPACK_IMPORTED_MODULE_0__.getBooleanInput('required');
 
         try {
           const cacheKey =
