@@ -2,7 +2,7 @@
 
 This is a fork of [martijnhols/actions-cache] at version 3.0.4 but only contains a slimmed down version of the [restore] action.  
 
-This action will restore a cache but will not save the cache in a post-job step. 
+This action will restore a cache but will not save the cache in a post-job step.
 
 If you need an action that saves a cache, check out the official [actions/cache] action.
 
@@ -12,7 +12,7 @@ If you need an action that saves a cache, check out the official [actions/cache]
 - [Outputs](#outputs)
 - [Usage Examples](#usage-examples)
 - [Contributing](#contributing)
-  - [Recompiling](#recompiling)
+  - [Recompiling](#recompiling-manually)
   - [Incrementing the Version](#incrementing-the-version)
 - [Code of Conduct](#code-of-conduct)
 - [License](#license)
@@ -52,7 +52,7 @@ jobs:
           
       - name: Check for an npm cache
         id: has-npm-cache
-        uses: im-open/check-for-cache@v1.1.0
+        uses: im-open/check-for-cache@v1
         with:
           paths:  '**/node_modules'
           key: ${{ env.NPM_CACHE_KEY }}
@@ -84,7 +84,7 @@ jobs:
         
       - name: Download the node_modules folder from the cache
         id: get-cached-node-modules
-        uses: im-open/restore-cache@v1.1.3
+        uses: im-open/restore-cache@v1.1.4
         with:
           key: ${{ needs.set-cache-keys.outputs.NPM_MODULES_CACHE_KEY }}
           path: '**/node_modules'
