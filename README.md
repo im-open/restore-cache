@@ -84,7 +84,7 @@ jobs:
         
       - name: Download the node_modules folder from the cache
         id: get-cached-node-modules
-        uses: im-open/restore-cache@v1.1.6
+        uses: im-open/restore-cache@v1.1.7
         with:
           key: ${{ needs.set-cache-keys.outputs.NPM_MODULES_CACHE_KEY }}
           path: '**/node_modules'
