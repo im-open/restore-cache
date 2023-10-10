@@ -1,5 +1,5 @@
 import * as core from '@actions/core';
-import * as cache from '@martijnhols/actions-cache';
+import * as cache from '@actions/cache';
 
 function getInputAsArray(name, options) {
   return core

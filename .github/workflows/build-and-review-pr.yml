@@ -60,3 +60,183 @@ jobs:
       # The npm script to run to build the action.  This is typically 'npm run build' if the
       # action needs to be compiled.  For composite-run-steps actions this is typically empty.
       build-command: 'npm run build'
+  
+  create-cache:
+    runs-on: ubuntu-latest
+
+    env:
+      NUGET_CACHE_KEY: ''
+    
+    outputs:
+      NUGET_CACHE_KEY: ${{ env.NUGET_CACHE_KEY }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+        
+      - name: Set Cache Keys
+        run: echo "NUGET_CACHE_KEY=nuget-${{ hashFiles('**/*.csproj') }}" >> $GITHUB_ENV
+
+      - name: Check for a nuget cache
+        id: has-cache
+        uses: actions/cache@v3
+        with:
+          path: '~/.nuget/packages'
+          key: ${{ env.NUGET_CACHE_KEY }}
+          lookup-only: true
+          enableCrossOsArchive: true
+
+      # The remaining steps will only be executed if the cache was NOT found, otherwise they will be skipped.
+
+      # This action creates a post-job step that will upload the ./.nuget/packages dir to the cache if the job completes successfully
+      - name: Setup caching for nuget packages if cache does not exist
+        if: steps.has-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v3
+        with:
+          key: ${{ env.NUGET_CACHE_KEY }}
+          path: ~/.nuget/packages
+          enableCrossOsArchive: true
+
+      - name: Setup .NET Core if cache does not exist
+        if: steps.has-cache.outputs.cache-hit != 'true'
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 7.x
+        env:
+          DOTNET_INSTALL_DIR: './.dotnet'
+
+      - name: dotnet restore if cache does not exist
+        if: steps.has-cache.outputs.cache-hit != 'true'
+        working-directory: ./test/minimal-dotnet-proj
+        run: dotnet restore
+  
+  test:
+    runs-on: ubuntu-latest
+    needs: [create-cache]
+
+    env:
+      NUGET_CACHE_KEY: ${{ needs.create-cache.outputs.NUGET_CACHE_KEY }}
+      BAD_CACHE_KEY: 'abc123'
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+
+      #--------------------------------------
+      # NO CACHE HIT - WITH FAILURE
+      #--------------------------------------
+      - name: '-------------------------------------------------------------------------------------------------------'
+        run: echo ""
+      
+      - name: When restoring a cache with a bad key and required=true
+        uses: ./
+        if: always()
+        id: required
+        continue-on-error: true # This is needed because we expect the step to fail.  We need it to "pass" in order for the test job to succeed.
+        with:
+          key: '${{ env.BAD_CACHE_KEY }}'
+          required: true
+          path: ~/.nuget/packages
+          
+      - name: Then the outcome should be failure
+        if: always()
+        run: ./test/assert-values-match.sh --name "step outcome" --expected "failure" --actual "${{ steps.required.outcome }}"
+      
+      - name: And the cache-hit output should be empty
+        if: always()
+        run: ./test/assert-values-match.sh --name "cache-hit" --expected "" --actual "${{ steps.required.outputs.cache-hit }}"
+      
+      - name: And the primary key output should match the key input
+        if: always()
+        run: ./test/assert-values-match.sh --name "cache-hit" --expected "${{ env.BAD_CACHE_KEY }}" --actual "${{ steps.required.outputs.primary-key }}"
+      
+      #--------------------------------------
+      # NO CACHE HIT - NO FAILURE
+      #--------------------------------------
+      - name: '-------------------------------------------------------------------------------------------------------'
+        run: echo ""
+      
+      - name: When restoring a cache with a bad key and required=false
+        uses: ./
+        if: always()
+        id: not-required
+        with:
+          key: '${{ env.BAD_CACHE_KEY }}'
+          required: false
+          path: ~/.nuget/packages
+          
+      - name: Then the outcome should be success
+        if: always()
+        run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.not-required.outcome }}"
+      
+      - name: And the cache-hit output should be false
+        if: always()
+        run: ./test/assert-values-match.sh --name "cache-hit" --expected "false" --actual "${{ steps.not-required.outputs.cache-hit }}" 
+      
+      - name: And the primary key output should match the key input
+        if: always()
+        run: ./test/assert-values-match.sh --name "cache-hit" --expected "${{ env.BAD_CACHE_KEY }}" --actual "${{ steps.not-required.outputs.primary-key }}"
+      
+      #--------------------------------------
+      # USING RESTORE KEYS
+      #--------------------------------------
+      - name: '-------------------------------------------------------------------------------------------------------'
+        run: echo ""
+      
+      - name: When restoring a cache with a bad key and a list of restore keys
+        uses: ./
+        if: always()
+        id: restore-keys
+        with:
+          key: '${{ env.BAD_CACHE_KEY }}'
+          required: false
+          path: ~/.nuget/packages
+          restore-keys: |
+            'bad-key-a'
+            'bad-key-b'
+            'bad-key-c'
+      
+      - name: Then the outcome should be success
+        if: always()
+        run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.restore-keys.outcome }}"
+      
+      - name: And the cache-hit output should be false
+        if: always()
+        run: ./test/assert-values-match.sh --name "cache-hit" --expected "false" --actual "${{ steps.restore-keys.outputs.cache-hit }}"
+      
+      - name: And the primary key output should match the key input
+        if: always()
+        run: ./test/assert-values-match.sh --name "cache-hit" --expected "${{ env.BAD_CACHE_KEY }}" --actual "${{ steps.restore-keys.outputs.primary-key }}"
+      
+      #--------------------------------------
+      # EXACT MATCH
+      #--------------------------------------
+      - name: '-------------------------------------------------------------------------------------------------------'
+        run: echo ""
+      
+      - name: When restoring a cache with the cache key
+        uses: ./
+        if: always()
+        id: success
+        with:
+          key: '${{ env.NUGET_CACHE_KEY }}'
+          required: true
+          path: ~/.nuget/packages
+      
+      - name: Then the outcome should be success
+        if: always()
+        run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.success.outcome }}"
+      
+      - name: And the cache-hit output should be true
+        if: always()
+        run: ./test/assert-values-match.sh --name "cache-hit" --expected "true" --actual "${{ steps.success.outputs.cache-hit }}"
+      
+      - name: And the primary key output should match the key input
+        if: always()
+        run: ./test/assert-values-match.sh --name "cache-hit" --expected "${{ env.NUGET_CACHE_KEY }}" --actual "${{ steps.success.outputs.primary-key }}"
+      
+      - name: '-------------------------------------------------------------------------------------------------------'
+        run: echo ""

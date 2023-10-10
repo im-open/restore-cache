@@ -1,6 +1,2210 @@
 /******/ (() => {
   // webpackBootstrap
   /******/ var __webpack_modules__ = {
+    /***/ 7799: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
+      'use strict';
+
+      var __createBinding =
+        (this && this.__createBinding) ||
+        (Object.create
+          ? function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              var desc = Object.getOwnPropertyDescriptor(m, k);
+              if (!desc || ('get' in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+                desc = {
+                  enumerable: true,
+                  get: function () {
+                    return m[k];
+                  }
+                };
+              }
+              Object.defineProperty(o, k2, desc);
+            }
+          : function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              o[k2] = m[k];
+            });
+      var __setModuleDefault =
+        (this && this.__setModuleDefault) ||
+        (Object.create
+          ? function (o, v) {
+              Object.defineProperty(o, 'default', { enumerable: true, value: v });
+            }
+          : function (o, v) {
+              o['default'] = v;
+            });
+      var __importStar =
+        (this && this.__importStar) ||
+        function (mod) {
+          if (mod && mod.__esModule) return mod;
+          var result = {};
+          if (mod != null)
+            for (var k in mod)
+              if (k !== 'default' && Object.prototype.hasOwnProperty.call(mod, k))
+                __createBinding(result, mod, k);
+          __setModuleDefault(result, mod);
+          return result;
+        };
+      var __awaiter =
+        (this && this.__awaiter) ||
+        function (thisArg, _arguments, P, generator) {
+          function adopt(value) {
+            return value instanceof P
+              ? value
+              : new P(function (resolve) {
+                  resolve(value);
+                });
+          }
+          return new (P || (P = Promise))(function (resolve, reject) {
+            function fulfilled(value) {
+              try {
+                step(generator.next(value));
+              } catch (e) {
+                reject(e);
+              }
+            }
+            function rejected(value) {
+              try {
+                step(generator['throw'](value));
+              } catch (e) {
+                reject(e);
+              }
+            }
+            function step(result) {
+              result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+            }
+            step((generator = generator.apply(thisArg, _arguments || [])).next());
+          });
+        };
+      Object.defineProperty(exports, '__esModule', { value: true });
+      exports.saveCache =
+        exports.restoreCache =
+        exports.isFeatureAvailable =
+        exports.ReserveCacheError =
+        exports.ValidationError =
+          void 0;
+      const core = __importStar(__nccwpck_require__(2186));
+      const path = __importStar(__nccwpck_require__(5622));
+      const utils = __importStar(__nccwpck_require__(1518));
+      const cacheHttpClient = __importStar(__nccwpck_require__(8245));
+      const tar_1 = __nccwpck_require__(6490);
+      class ValidationError extends Error {
+        constructor(message) {
+          super(message);
+          this.name = 'ValidationError';
+          Object.setPrototypeOf(this, ValidationError.prototype);
+        }
+      }
+      exports.ValidationError = ValidationError;
+      class ReserveCacheError extends Error {
+        constructor(message) {
+          super(message);
+          this.name = 'ReserveCacheError';
+          Object.setPrototypeOf(this, ReserveCacheError.prototype);
+        }
+      }
+      exports.ReserveCacheError = ReserveCacheError;
+      function checkPaths(paths) {
+        if (!paths || paths.length === 0) {
+          throw new ValidationError(
+            `Path Validation Error: At least one directory or file path is required`
+          );
+        }
+      }
+      function checkKey(key) {
+        if (key.length > 512) {
+          throw new ValidationError(
+            `Key Validation Error: ${key} cannot be larger than 512 characters.`
+          );
+        }
+        const regex = /^[^,]*$/;
+        if (!regex.test(key)) {
+          throw new ValidationError(`Key Validation Error: ${key} cannot contain commas.`);
+        }
+      }
+      /**
+       * isFeatureAvailable to check the presence of Actions cache service
+       *
+       * @returns boolean return true if Actions cache service feature is available, otherwise false
+       */
+      function isFeatureAvailable() {
+        return !!process.env['ACTIONS_CACHE_URL'];
+      }
+      exports.isFeatureAvailable = isFeatureAvailable;
+      /**
+       * Restores cache from keys
+       *
+       * @param paths a list of file paths to restore from the cache
+       * @param primaryKey an explicit key for restoring the cache
+       * @param restoreKeys an optional ordered list of keys to use for restoring the cache if no cache hit occurred for key
+       * @param downloadOptions cache download options
+       * @param enableCrossOsArchive an optional boolean enabled to restore on windows any cache created on any platform
+       * @returns string returns the key for the cache hit, otherwise returns undefined
+       */
+      function restoreCache(paths, primaryKey, restoreKeys, options, enableCrossOsArchive = false) {
+        return __awaiter(this, void 0, void 0, function* () {
+          checkPaths(paths);
+          restoreKeys = restoreKeys || [];
+          const keys = [primaryKey, ...restoreKeys];
+          core.debug('Resolved Keys:');
+          core.debug(JSON.stringify(keys));
+          if (keys.length > 10) {
+            throw new ValidationError(`Key Validation Error: Keys are limited to a maximum of 10.`);
+          }
+          for (const key of keys) {
+            checkKey(key);
+          }
+          const compressionMethod = yield utils.getCompressionMethod();
+          let archivePath = '';
+          try {
+            // path are needed to compute version
+            const cacheEntry = yield cacheHttpClient.getCacheEntry(keys, paths, {
+              compressionMethod,
+              enableCrossOsArchive
+            });
+            if (
+              !(cacheEntry === null || cacheEntry === void 0 ? void 0 : cacheEntry.archiveLocation)
+            ) {
+              // Cache not found
+              return undefined;
+            }
+            if (options === null || options === void 0 ? void 0 : options.lookupOnly) {
+              core.info('Lookup only - skipping download');
+              return cacheEntry.cacheKey;
+            }
+            archivePath = path.join(
+              yield utils.createTempDirectory(),
+              utils.getCacheFileName(compressionMethod)
+            );
+            core.debug(`Archive Path: ${archivePath}`);
+            // Download the cache from the cache entry
+            yield cacheHttpClient.downloadCache(cacheEntry.archiveLocation, archivePath, options);
+            if (core.isDebug()) {
+              yield (0, tar_1.listTar)(archivePath, compressionMethod);
+            }
+            const archiveFileSize = utils.getArchiveFileSizeInBytes(archivePath);
+            core.info(
+              `Cache Size: ~${Math.round(
+                archiveFileSize / (1024 * 1024)
+              )} MB (${archiveFileSize} B)`
+            );
+            yield (0, tar_1.extractTar)(archivePath, compressionMethod);
+            core.info('Cache restored successfully');
+            return cacheEntry.cacheKey;
+          } catch (error) {
+            const typedError = error;
+            if (typedError.name === ValidationError.name) {
+              throw error;
+            } else {
+              // Supress all non-validation cache related errors because caching should be optional
+              core.warning(`Failed to restore: ${error.message}`);
+            }
+          } finally {
+            // Try to delete the archive to save space
+            try {
+              yield utils.unlinkFile(archivePath);
+            } catch (error) {
+              core.debug(`Failed to delete archive: ${error}`);
+            }
+          }
+          return undefined;
+        });
+      }
+      exports.restoreCache = restoreCache;
+      /**
+       * Saves a list of files with the specified key
+       *
+       * @param paths a list of file paths to be cached
+       * @param key an explicit key for restoring the cache
+       * @param enableCrossOsArchive an optional boolean enabled to save cache on windows which could be restored on any platform
+       * @param options cache upload options
+       * @returns number returns cacheId if the cache was saved successfully and throws an error if save fails
+       */
+      function saveCache(paths, key, options, enableCrossOsArchive = false) {
+        var _a, _b, _c, _d, _e;
+        return __awaiter(this, void 0, void 0, function* () {
+          checkPaths(paths);
+          checkKey(key);
+          const compressionMethod = yield utils.getCompressionMethod();
+          let cacheId = -1;
+          const cachePaths = yield utils.resolvePaths(paths);
+          core.debug('Cache Paths:');
+          core.debug(`${JSON.stringify(cachePaths)}`);
+          if (cachePaths.length === 0) {
+            throw new Error(
+              `Path Validation Error: Path(s) specified in the action for caching do(es) not exist, hence no cache is being saved.`
+            );
+          }
+          const archiveFolder = yield utils.createTempDirectory();
+          const archivePath = path.join(archiveFolder, utils.getCacheFileName(compressionMethod));
+          core.debug(`Archive Path: ${archivePath}`);
+          try {
+            yield (0, tar_1.createTar)(archiveFolder, cachePaths, compressionMethod);
+            if (core.isDebug()) {
+              yield (0, tar_1.listTar)(archivePath, compressionMethod);
+            }
+            const fileSizeLimit = 10 * 1024 * 1024 * 1024; // 10GB per repo limit
+            const archiveFileSize = utils.getArchiveFileSizeInBytes(archivePath);
+            core.debug(`File Size: ${archiveFileSize}`);
+            // For GHES, this check will take place in ReserveCache API with enterprise file size limit
+            if (archiveFileSize > fileSizeLimit && !utils.isGhes()) {
+              throw new Error(
+                `Cache size of ~${Math.round(
+                  archiveFileSize / (1024 * 1024)
+                )} MB (${archiveFileSize} B) is over the 10GB limit, not saving cache.`
+              );
+            }
+            core.debug('Reserving Cache');
+            const reserveCacheResponse = yield cacheHttpClient.reserveCache(key, paths, {
+              compressionMethod,
+              enableCrossOsArchive,
+              cacheSize: archiveFileSize
+            });
+            if (
+              (_a =
+                reserveCacheResponse === null || reserveCacheResponse === void 0
+                  ? void 0
+                  : reserveCacheResponse.result) === null || _a === void 0
+                ? void 0
+                : _a.cacheId
+            ) {
+              cacheId =
+                (_b =
+                  reserveCacheResponse === null || reserveCacheResponse === void 0
+                    ? void 0
+                    : reserveCacheResponse.result) === null || _b === void 0
+                  ? void 0
+                  : _b.cacheId;
+            } else if (
+              (reserveCacheResponse === null || reserveCacheResponse === void 0
+                ? void 0
+                : reserveCacheResponse.statusCode) === 400
+            ) {
+              throw new Error(
+                (_d =
+                  (_c =
+                    reserveCacheResponse === null || reserveCacheResponse === void 0
+                      ? void 0
+                      : reserveCacheResponse.error) === null || _c === void 0
+                    ? void 0
+                    : _c.message) !== null && _d !== void 0
+                  ? _d
+                  : `Cache size of ~${Math.round(
+                      archiveFileSize / (1024 * 1024)
+                    )} MB (${archiveFileSize} B) is over the data cap limit, not saving cache.`
+              );
+            } else {
+              throw new ReserveCacheError(
+                `Unable to reserve cache with key ${key}, another job may be creating this cache. More details: ${
+                  (_e =
+                    reserveCacheResponse === null || reserveCacheResponse === void 0
+                      ? void 0
+                      : reserveCacheResponse.error) === null || _e === void 0
+                    ? void 0
+                    : _e.message
+                }`
+              );
+            }
+            core.debug(`Saving Cache (ID: ${cacheId})`);
+            yield cacheHttpClient.saveCache(cacheId, archivePath, options);
+          } catch (error) {
+            const typedError = error;
+            if (typedError.name === ValidationError.name) {
+              throw error;
+            } else if (typedError.name === ReserveCacheError.name) {
+              core.info(`Failed to save: ${typedError.message}`);
+            } else {
+              core.warning(`Failed to save: ${typedError.message}`);
+            }
+          } finally {
+            // Try to delete the archive to save space
+            try {
+              yield utils.unlinkFile(archivePath);
+            } catch (error) {
+              core.debug(`Failed to delete archive: ${error}`);
+            }
+          }
+          return cacheId;
+        });
+      }
+      exports.saveCache = saveCache;
+      //# sourceMappingURL=cache.js.map
+
+      /***/
+    },
+
+    /***/ 8245: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
+      'use strict';
+
+      var __createBinding =
+        (this && this.__createBinding) ||
+        (Object.create
+          ? function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              var desc = Object.getOwnPropertyDescriptor(m, k);
+              if (!desc || ('get' in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+                desc = {
+                  enumerable: true,
+                  get: function () {
+                    return m[k];
+                  }
+                };
+              }
+              Object.defineProperty(o, k2, desc);
+            }
+          : function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              o[k2] = m[k];
+            });
+      var __setModuleDefault =
+        (this && this.__setModuleDefault) ||
+        (Object.create
+          ? function (o, v) {
+              Object.defineProperty(o, 'default', { enumerable: true, value: v });
+            }
+          : function (o, v) {
+              o['default'] = v;
+            });
+      var __importStar =
+        (this && this.__importStar) ||
+        function (mod) {
+          if (mod && mod.__esModule) return mod;
+          var result = {};
+          if (mod != null)
+            for (var k in mod)
+              if (k !== 'default' && Object.prototype.hasOwnProperty.call(mod, k))
+                __createBinding(result, mod, k);
+          __setModuleDefault(result, mod);
+          return result;
+        };
+      var __awaiter =
+        (this && this.__awaiter) ||
+        function (thisArg, _arguments, P, generator) {
+          function adopt(value) {
+            return value instanceof P
+              ? value
+              : new P(function (resolve) {
+                  resolve(value);
+                });
+          }
+          return new (P || (P = Promise))(function (resolve, reject) {
+            function fulfilled(value) {
+              try {
+                step(generator.next(value));
+              } catch (e) {
+                reject(e);
+              }
+            }
+            function rejected(value) {
+              try {
+                step(generator['throw'](value));
+              } catch (e) {
+                reject(e);
+              }
+            }
+            function step(result) {
+              result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+            }
+            step((generator = generator.apply(thisArg, _arguments || [])).next());
+          });
+        };
+      Object.defineProperty(exports, '__esModule', { value: true });
+      exports.saveCache =
+        exports.reserveCache =
+        exports.downloadCache =
+        exports.getCacheEntry =
+        exports.getCacheVersion =
+          void 0;
+      const core = __importStar(__nccwpck_require__(2186));
+      const http_client_1 = __nccwpck_require__(6255);
+      const auth_1 = __nccwpck_require__(5526);
+      const crypto = __importStar(__nccwpck_require__(6417));
+      const fs = __importStar(__nccwpck_require__(5747));
+      const url_1 = __nccwpck_require__(8835);
+      const utils = __importStar(__nccwpck_require__(1518));
+      const downloadUtils_1 = __nccwpck_require__(5500);
+      const options_1 = __nccwpck_require__(6215);
+      const requestUtils_1 = __nccwpck_require__(3981);
+      const versionSalt = '1.0';
+      function getCacheApiUrl(resource) {
+        const baseUrl = process.env['ACTIONS_CACHE_URL'] || '';
+        if (!baseUrl) {
+          throw new Error('Cache Service Url not found, unable to restore cache.');
+        }
+        const url = `${baseUrl}_apis/artifactcache/${resource}`;
+        core.debug(`Resource Url: ${url}`);
+        return url;
+      }
+      function createAcceptHeader(type, apiVersion) {
+        return `${type};api-version=${apiVersion}`;
+      }
+      function getRequestOptions() {
+        const requestOptions = {
+          headers: {
+            Accept: createAcceptHeader('application/json', '6.0-preview.1')
+          }
+        };
+        return requestOptions;
+      }
+      function createHttpClient() {
+        const token = process.env['ACTIONS_RUNTIME_TOKEN'] || '';
+        const bearerCredentialHandler = new auth_1.BearerCredentialHandler(token);
+        return new http_client_1.HttpClient(
+          'actions/cache',
+          [bearerCredentialHandler],
+          getRequestOptions()
+        );
+      }
+      function getCacheVersion(paths, compressionMethod, enableCrossOsArchive = false) {
+        const components = paths;
+        // Add compression method to cache version to restore
+        // compressed cache as per compression method
+        if (compressionMethod) {
+          components.push(compressionMethod);
+        }
+        // Only check for windows platforms if enableCrossOsArchive is false
+        if (process.platform === 'win32' && !enableCrossOsArchive) {
+          components.push('windows-only');
+        }
+        // Add salt to cache version to support breaking changes in cache entry
+        components.push(versionSalt);
+        return crypto.createHash('sha256').update(components.join('|')).digest('hex');
+      }
+      exports.getCacheVersion = getCacheVersion;
+      function getCacheEntry(keys, paths, options) {
+        return __awaiter(this, void 0, void 0, function* () {
+          const httpClient = createHttpClient();
+          const version = getCacheVersion(
+            paths,
+            options === null || options === void 0 ? void 0 : options.compressionMethod,
+            options === null || options === void 0 ? void 0 : options.enableCrossOsArchive
+          );
+          const resource = `cache?keys=${encodeURIComponent(keys.join(','))}&version=${version}`;
+          const response = yield (0, requestUtils_1.retryTypedResponse)('getCacheEntry', () =>
+            __awaiter(this, void 0, void 0, function* () {
+              return httpClient.getJson(getCacheApiUrl(resource));
+            })
+          );
+          // Cache not found
+          if (response.statusCode === 204) {
+            // List cache for primary key only if cache miss occurs
+            if (core.isDebug()) {
+              yield printCachesListForDiagnostics(keys[0], httpClient, version);
+            }
+            return null;
+          }
+          if (!(0, requestUtils_1.isSuccessStatusCode)(response.statusCode)) {
+            throw new Error(`Cache service responded with ${response.statusCode}`);
+          }
+          const cacheResult = response.result;
+          const cacheDownloadUrl =
+            cacheResult === null || cacheResult === void 0 ? void 0 : cacheResult.archiveLocation;
+          if (!cacheDownloadUrl) {
+            // Cache achiveLocation not found. This should never happen, and hence bail out.
+            throw new Error('Cache not found.');
+          }
+          core.setSecret(cacheDownloadUrl);
+          core.debug(`Cache Result:`);
+          core.debug(JSON.stringify(cacheResult));
+          return cacheResult;
+        });
+      }
+      exports.getCacheEntry = getCacheEntry;
+      function printCachesListForDiagnostics(key, httpClient, version) {
+        return __awaiter(this, void 0, void 0, function* () {
+          const resource = `caches?key=${encodeURIComponent(key)}`;
+          const response = yield (0, requestUtils_1.retryTypedResponse)('listCache', () =>
+            __awaiter(this, void 0, void 0, function* () {
+              return httpClient.getJson(getCacheApiUrl(resource));
+            })
+          );
+          if (response.statusCode === 200) {
+            const cacheListResult = response.result;
+            const totalCount =
+              cacheListResult === null || cacheListResult === void 0
+                ? void 0
+                : cacheListResult.totalCount;
+            if (totalCount && totalCount > 0) {
+              core.debug(
+                `No matching cache found for cache key '${key}', version '${version} and scope ${process.env['GITHUB_REF']}. There exist one or more cache(s) with similar key but they have different version or scope. See more info on cache matching here: https://docs.github.com/en/actions/using-workflows/caching-dependencies-to-speed-up-workflows#matching-a-cache-key \nOther caches with similar key:`
+              );
+              for (const cacheEntry of (cacheListResult === null || cacheListResult === void 0
+                ? void 0
+                : cacheListResult.artifactCaches) || []) {
+                core.debug(
+                  `Cache Key: ${
+                    cacheEntry === null || cacheEntry === void 0 ? void 0 : cacheEntry.cacheKey
+                  }, Cache Version: ${
+                    cacheEntry === null || cacheEntry === void 0 ? void 0 : cacheEntry.cacheVersion
+                  }, Cache Scope: ${
+                    cacheEntry === null || cacheEntry === void 0 ? void 0 : cacheEntry.scope
+                  }, Cache Created: ${
+                    cacheEntry === null || cacheEntry === void 0 ? void 0 : cacheEntry.creationTime
+                  }`
+                );
+              }
+            }
+          }
+        });
+      }
+      function downloadCache(archiveLocation, archivePath, options) {
+        return __awaiter(this, void 0, void 0, function* () {
+          const archiveUrl = new url_1.URL(archiveLocation);
+          const downloadOptions = (0, options_1.getDownloadOptions)(options);
+          if (archiveUrl.hostname.endsWith('.blob.core.windows.net')) {
+            if (downloadOptions.useAzureSdk) {
+              // Use Azure storage SDK to download caches hosted on Azure to improve speed and reliability.
+              yield (0, downloadUtils_1.downloadCacheStorageSDK)(
+                archiveLocation,
+                archivePath,
+                downloadOptions
+              );
+            } else if (downloadOptions.concurrentBlobDownloads) {
+              // Use concurrent implementation with HttpClient to work around blob SDK issue
+              yield (0, downloadUtils_1.downloadCacheHttpClientConcurrent)(
+                archiveLocation,
+                archivePath,
+                downloadOptions
+              );
+            } else {
+              // Otherwise, download using the Actions http-client.
+              yield (0, downloadUtils_1.downloadCacheHttpClient)(archiveLocation, archivePath);
+            }
+          } else {
+            yield (0, downloadUtils_1.downloadCacheHttpClient)(archiveLocation, archivePath);
+          }
+        });
+      }
+      exports.downloadCache = downloadCache;
+      // Reserve Cache
+      function reserveCache(key, paths, options) {
+        return __awaiter(this, void 0, void 0, function* () {
+          const httpClient = createHttpClient();
+          const version = getCacheVersion(
+            paths,
+            options === null || options === void 0 ? void 0 : options.compressionMethod,
+            options === null || options === void 0 ? void 0 : options.enableCrossOsArchive
+          );
+          const reserveCacheRequest = {
+            key,
+            version,
+            cacheSize: options === null || options === void 0 ? void 0 : options.cacheSize
+          };
+          const response = yield (0, requestUtils_1.retryTypedResponse)('reserveCache', () =>
+            __awaiter(this, void 0, void 0, function* () {
+              return httpClient.postJson(getCacheApiUrl('caches'), reserveCacheRequest);
+            })
+          );
+          return response;
+        });
+      }
+      exports.reserveCache = reserveCache;
+      function getContentRange(start, end) {
+        // Format: `bytes start-end/filesize
+        // start and end are inclusive
+        // filesize can be *
+        // For a 200 byte chunk starting at byte 0:
+        // Content-Range: bytes 0-199/*
+        return `bytes ${start}-${end}/*`;
+      }
+      function uploadChunk(httpClient, resourceUrl, openStream, start, end) {
+        return __awaiter(this, void 0, void 0, function* () {
+          core.debug(
+            `Uploading chunk of size ${
+              end - start + 1
+            } bytes at offset ${start} with content range: ${getContentRange(start, end)}`
+          );
+          const additionalHeaders = {
+            'Content-Type': 'application/octet-stream',
+            'Content-Range': getContentRange(start, end)
+          };
+          const uploadChunkResponse = yield (0, requestUtils_1.retryHttpClientResponse)(
+            `uploadChunk (start: ${start}, end: ${end})`,
+            () =>
+              __awaiter(this, void 0, void 0, function* () {
+                return httpClient.sendStream('PATCH', resourceUrl, openStream(), additionalHeaders);
+              })
+          );
+          if (!(0, requestUtils_1.isSuccessStatusCode)(uploadChunkResponse.message.statusCode)) {
+            throw new Error(
+              `Cache service responded with ${uploadChunkResponse.message.statusCode} during upload chunk.`
+            );
+          }
+        });
+      }
+      function uploadFile(httpClient, cacheId, archivePath, options) {
+        return __awaiter(this, void 0, void 0, function* () {
+          // Upload Chunks
+          const fileSize = utils.getArchiveFileSizeInBytes(archivePath);
+          const resourceUrl = getCacheApiUrl(`caches/${cacheId.toString()}`);
+          const fd = fs.openSync(archivePath, 'r');
+          const uploadOptions = (0, options_1.getUploadOptions)(options);
+          const concurrency = utils.assertDefined(
+            'uploadConcurrency',
+            uploadOptions.uploadConcurrency
+          );
+          const maxChunkSize = utils.assertDefined(
+            'uploadChunkSize',
+            uploadOptions.uploadChunkSize
+          );
+          const parallelUploads = [...new Array(concurrency).keys()];
+          core.debug('Awaiting all uploads');
+          let offset = 0;
+          try {
+            yield Promise.all(
+              parallelUploads.map(() =>
+                __awaiter(this, void 0, void 0, function* () {
+                  while (offset < fileSize) {
+                    const chunkSize = Math.min(fileSize - offset, maxChunkSize);
+                    const start = offset;
+                    const end = offset + chunkSize - 1;
+                    offset += maxChunkSize;
+                    yield uploadChunk(
+                      httpClient,
+                      resourceUrl,
+                      () =>
+                        fs
+                          .createReadStream(archivePath, {
+                            fd,
+                            start,
+                            end,
+                            autoClose: false
+                          })
+                          .on('error', error => {
+                            throw new Error(
+                              `Cache upload failed because file read failed with ${error.message}`
+                            );
+                          }),
+                      start,
+                      end
+                    );
+                  }
+                })
+              )
+            );
+          } finally {
+            fs.closeSync(fd);
+          }
+          return;
+        });
+      }
+      function commitCache(httpClient, cacheId, filesize) {
+        return __awaiter(this, void 0, void 0, function* () {
+          const commitCacheRequest = { size: filesize };
+          return yield (0, requestUtils_1.retryTypedResponse)('commitCache', () =>
+            __awaiter(this, void 0, void 0, function* () {
+              return httpClient.postJson(
+                getCacheApiUrl(`caches/${cacheId.toString()}`),
+                commitCacheRequest
+              );
+            })
+          );
+        });
+      }
+      function saveCache(cacheId, archivePath, options) {
+        return __awaiter(this, void 0, void 0, function* () {
+          const httpClient = createHttpClient();
+          core.debug('Upload cache');
+          yield uploadFile(httpClient, cacheId, archivePath, options);
+          // Commit Cache
+          core.debug('Commiting cache');
+          const cacheSize = utils.getArchiveFileSizeInBytes(archivePath);
+          core.info(`Cache Size: ~${Math.round(cacheSize / (1024 * 1024))} MB (${cacheSize} B)`);
+          const commitCacheResponse = yield commitCache(httpClient, cacheId, cacheSize);
+          if (!(0, requestUtils_1.isSuccessStatusCode)(commitCacheResponse.statusCode)) {
+            throw new Error(
+              `Cache service responded with ${commitCacheResponse.statusCode} during commit cache.`
+            );
+          }
+          core.info('Cache saved successfully');
+        });
+      }
+      exports.saveCache = saveCache;
+      //# sourceMappingURL=cacheHttpClient.js.map
+
+      /***/
+    },
+
+    /***/ 1518: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
+      'use strict';
+
+      var __createBinding =
+        (this && this.__createBinding) ||
+        (Object.create
+          ? function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              var desc = Object.getOwnPropertyDescriptor(m, k);
+              if (!desc || ('get' in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+                desc = {
+                  enumerable: true,
+                  get: function () {
+                    return m[k];
+                  }
+                };
+              }
+              Object.defineProperty(o, k2, desc);
+            }
+          : function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              o[k2] = m[k];
+            });
+      var __setModuleDefault =
+        (this && this.__setModuleDefault) ||
+        (Object.create
+          ? function (o, v) {
+              Object.defineProperty(o, 'default', { enumerable: true, value: v });
+            }
+          : function (o, v) {
+              o['default'] = v;
+            });
+      var __importStar =
+        (this && this.__importStar) ||
+        function (mod) {
+          if (mod && mod.__esModule) return mod;
+          var result = {};
+          if (mod != null)
+            for (var k in mod)
+              if (k !== 'default' && Object.prototype.hasOwnProperty.call(mod, k))
+                __createBinding(result, mod, k);
+          __setModuleDefault(result, mod);
+          return result;
+        };
+      var __awaiter =
+        (this && this.__awaiter) ||
+        function (thisArg, _arguments, P, generator) {
+          function adopt(value) {
+            return value instanceof P
+              ? value
+              : new P(function (resolve) {
+                  resolve(value);
+                });
+          }
+          return new (P || (P = Promise))(function (resolve, reject) {
+            function fulfilled(value) {
+              try {
+                step(generator.next(value));
+              } catch (e) {
+                reject(e);
+              }
+            }
+            function rejected(value) {
+              try {
+                step(generator['throw'](value));
+              } catch (e) {
+                reject(e);
+              }
+            }
+            function step(result) {
+              result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+            }
+            step((generator = generator.apply(thisArg, _arguments || [])).next());
+          });
+        };
+      var __asyncValues =
+        (this && this.__asyncValues) ||
+        function (o) {
+          if (!Symbol.asyncIterator) throw new TypeError('Symbol.asyncIterator is not defined.');
+          var m = o[Symbol.asyncIterator],
+            i;
+          return m
+            ? m.call(o)
+            : ((o = typeof __values === 'function' ? __values(o) : o[Symbol.iterator]()),
+              (i = {}),
+              verb('next'),
+              verb('throw'),
+              verb('return'),
+              (i[Symbol.asyncIterator] = function () {
+                return this;
+              }),
+              i);
+          function verb(n) {
+            i[n] =
+              o[n] &&
+              function (v) {
+                return new Promise(function (resolve, reject) {
+                  (v = o[n](v)), settle(resolve, reject, v.done, v.value);
+                });
+              };
+          }
+          function settle(resolve, reject, d, v) {
+            Promise.resolve(v).then(function (v) {
+              resolve({ value: v, done: d });
+            }, reject);
+          }
+        };
+      Object.defineProperty(exports, '__esModule', { value: true });
+      exports.isGhes =
+        exports.assertDefined =
+        exports.getGnuTarPathOnWindows =
+        exports.getCacheFileName =
+        exports.getCompressionMethod =
+        exports.unlinkFile =
+        exports.resolvePaths =
+        exports.getArchiveFileSizeInBytes =
+        exports.createTempDirectory =
+          void 0;
+      const core = __importStar(__nccwpck_require__(2186));
+      const exec = __importStar(__nccwpck_require__(1514));
+      const glob = __importStar(__nccwpck_require__(8090));
+      const io = __importStar(__nccwpck_require__(7436));
+      const fs = __importStar(__nccwpck_require__(5747));
+      const path = __importStar(__nccwpck_require__(5622));
+      const semver = __importStar(__nccwpck_require__(5911));
+      const util = __importStar(__nccwpck_require__(1669));
+      const uuid_1 = __nccwpck_require__(2155);
+      const constants_1 = __nccwpck_require__(8840);
+      // From https://github.com/actions/toolkit/blob/main/packages/tool-cache/src/tool-cache.ts#L23
+      function createTempDirectory() {
+        return __awaiter(this, void 0, void 0, function* () {
+          const IS_WINDOWS = process.platform === 'win32';
+          let tempDirectory = process.env['RUNNER_TEMP'] || '';
+          if (!tempDirectory) {
+            let baseLocation;
+            if (IS_WINDOWS) {
+              // On Windows use the USERPROFILE env variable
+              baseLocation = process.env['USERPROFILE'] || 'C:\\';
+            } else {
+              if (process.platform === 'darwin') {
+                baseLocation = '/Users';
+              } else {
+                baseLocation = '/home';
+              }
+            }
+            tempDirectory = path.join(baseLocation, 'actions', 'temp');
+          }
+          const dest = path.join(tempDirectory, (0, uuid_1.v4)());
+          yield io.mkdirP(dest);
+          return dest;
+        });
+      }
+      exports.createTempDirectory = createTempDirectory;
+      function getArchiveFileSizeInBytes(filePath) {
+        return fs.statSync(filePath).size;
+      }
+      exports.getArchiveFileSizeInBytes = getArchiveFileSizeInBytes;
+      function resolvePaths(patterns) {
+        var _a, e_1, _b, _c;
+        var _d;
+        return __awaiter(this, void 0, void 0, function* () {
+          const paths = [];
+          const workspace =
+            (_d = process.env['GITHUB_WORKSPACE']) !== null && _d !== void 0 ? _d : process.cwd();
+          const globber = yield glob.create(patterns.join('\n'), {
+            implicitDescendants: false
+          });
+          try {
+            for (
+              var _e = true, _f = __asyncValues(globber.globGenerator()), _g;
+              (_g = yield _f.next()), (_a = _g.done), !_a;
+
+            ) {
+              _c = _g.value;
+              _e = false;
+              try {
+                const file = _c;
+                const relativeFile = path
+                  .relative(workspace, file)
+                  .replace(new RegExp(`\\${path.sep}`, 'g'), '/');
+                core.debug(`Matched: ${relativeFile}`);
+                // Paths are made relative so the tar entries are all relative to the root of the workspace.
+                if (relativeFile === '') {
+                  // path.relative returns empty string if workspace and file are equal
+                  paths.push('.');
+                } else {
+                  paths.push(`${relativeFile}`);
+                }
+              } finally {
+                _e = true;
+              }
+            }
+          } catch (e_1_1) {
+            e_1 = { error: e_1_1 };
+          } finally {
+            try {
+              if (!_e && !_a && (_b = _f.return)) yield _b.call(_f);
+            } finally {
+              if (e_1) throw e_1.error;
+            }
+          }
+          return paths;
+        });
+      }
+      exports.resolvePaths = resolvePaths;
+      function unlinkFile(filePath) {
+        return __awaiter(this, void 0, void 0, function* () {
+          return util.promisify(fs.unlink)(filePath);
+        });
+      }
+      exports.unlinkFile = unlinkFile;
+      function getVersion(app, additionalArgs = []) {
+        return __awaiter(this, void 0, void 0, function* () {
+          let versionOutput = '';
+          additionalArgs.push('--version');
+          core.debug(`Checking ${app} ${additionalArgs.join(' ')}`);
+          try {
+            yield exec.exec(`${app}`, additionalArgs, {
+              ignoreReturnCode: true,
+              silent: true,
+              listeners: {
+                stdout: data => (versionOutput += data.toString()),
+                stderr: data => (versionOutput += data.toString())
+              }
+            });
+          } catch (err) {
+            core.debug(err.message);
+          }
+          versionOutput = versionOutput.trim();
+          core.debug(versionOutput);
+          return versionOutput;
+        });
+      }
+      // Use zstandard if possible to maximize cache performance
+      function getCompressionMethod() {
+        return __awaiter(this, void 0, void 0, function* () {
+          const versionOutput = yield getVersion('zstd', ['--quiet']);
+          const version = semver.clean(versionOutput);
+          core.debug(`zstd version: ${version}`);
+          if (versionOutput === '') {
+            return constants_1.CompressionMethod.Gzip;
+          } else {
+            return constants_1.CompressionMethod.ZstdWithoutLong;
+          }
+        });
+      }
+      exports.getCompressionMethod = getCompressionMethod;
+      function getCacheFileName(compressionMethod) {
+        return compressionMethod === constants_1.CompressionMethod.Gzip
+          ? constants_1.CacheFilename.Gzip
+          : constants_1.CacheFilename.Zstd;
+      }
+      exports.getCacheFileName = getCacheFileName;
+      function getGnuTarPathOnWindows() {
+        return __awaiter(this, void 0, void 0, function* () {
+          if (fs.existsSync(constants_1.GnuTarPathOnWindows)) {
+            return constants_1.GnuTarPathOnWindows;
+          }
+          const versionOutput = yield getVersion('tar');
+          return versionOutput.toLowerCase().includes('gnu tar') ? io.which('tar') : '';
+        });
+      }
+      exports.getGnuTarPathOnWindows = getGnuTarPathOnWindows;
+      function assertDefined(name, value) {
+        if (value === undefined) {
+          throw Error(`Expected ${name} but value was undefiend`);
+        }
+        return value;
+      }
+      exports.assertDefined = assertDefined;
+      function isGhes() {
+        const ghUrl = new URL(process.env['GITHUB_SERVER_URL'] || 'https://github.com');
+        return ghUrl.hostname.toUpperCase() !== 'GITHUB.COM';
+      }
+      exports.isGhes = isGhes;
+      //# sourceMappingURL=cacheUtils.js.map
+
+      /***/
+    },
+
+    /***/ 8840: /***/ (__unused_webpack_module, exports) => {
+      'use strict';
+
+      Object.defineProperty(exports, '__esModule', { value: true });
+      exports.ManifestFilename =
+        exports.TarFilename =
+        exports.SystemTarPathOnWindows =
+        exports.GnuTarPathOnWindows =
+        exports.SocketTimeout =
+        exports.DefaultRetryDelay =
+        exports.DefaultRetryAttempts =
+        exports.ArchiveToolType =
+        exports.CompressionMethod =
+        exports.CacheFilename =
+          void 0;
+      var CacheFilename;
+      (function (CacheFilename) {
+        CacheFilename['Gzip'] = 'cache.tgz';
+        CacheFilename['Zstd'] = 'cache.tzst';
+      })((CacheFilename = exports.CacheFilename || (exports.CacheFilename = {})));
+      var CompressionMethod;
+      (function (CompressionMethod) {
+        CompressionMethod['Gzip'] = 'gzip';
+        // Long range mode was added to zstd in v1.3.2.
+        // This enum is for earlier version of zstd that does not have --long support
+        CompressionMethod['ZstdWithoutLong'] = 'zstd-without-long';
+        CompressionMethod['Zstd'] = 'zstd';
+      })((CompressionMethod = exports.CompressionMethod || (exports.CompressionMethod = {})));
+      var ArchiveToolType;
+      (function (ArchiveToolType) {
+        ArchiveToolType['GNU'] = 'gnu';
+        ArchiveToolType['BSD'] = 'bsd';
+      })((ArchiveToolType = exports.ArchiveToolType || (exports.ArchiveToolType = {})));
+      // The default number of retry attempts.
+      exports.DefaultRetryAttempts = 2;
+      // The default delay in milliseconds between retry attempts.
+      exports.DefaultRetryDelay = 5000;
+      // Socket timeout in milliseconds during download.  If no traffic is received
+      // over the socket during this period, the socket is destroyed and the download
+      // is aborted.
+      exports.SocketTimeout = 5000;
+      // The default path of GNUtar on hosted Windows runners
+      exports.GnuTarPathOnWindows = `${process.env['PROGRAMFILES']}\\Git\\usr\\bin\\tar.exe`;
+      // The default path of BSDtar on hosted Windows runners
+      exports.SystemTarPathOnWindows = `${process.env['SYSTEMDRIVE']}\\Windows\\System32\\tar.exe`;
+      exports.TarFilename = 'cache.tar';
+      exports.ManifestFilename = 'manifest.txt';
+      //# sourceMappingURL=constants.js.map
+
+      /***/
+    },
+
+    /***/ 5500: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
+      'use strict';
+
+      var __createBinding =
+        (this && this.__createBinding) ||
+        (Object.create
+          ? function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              var desc = Object.getOwnPropertyDescriptor(m, k);
+              if (!desc || ('get' in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+                desc = {
+                  enumerable: true,
+                  get: function () {
+                    return m[k];
+                  }
+                };
+              }
+              Object.defineProperty(o, k2, desc);
+            }
+          : function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              o[k2] = m[k];
+            });
+      var __setModuleDefault =
+        (this && this.__setModuleDefault) ||
+        (Object.create
+          ? function (o, v) {
+              Object.defineProperty(o, 'default', { enumerable: true, value: v });
+            }
+          : function (o, v) {
+              o['default'] = v;
+            });
+      var __importStar =
+        (this && this.__importStar) ||
+        function (mod) {
+          if (mod && mod.__esModule) return mod;
+          var result = {};
+          if (mod != null)
+            for (var k in mod)
+              if (k !== 'default' && Object.prototype.hasOwnProperty.call(mod, k))
+                __createBinding(result, mod, k);
+          __setModuleDefault(result, mod);
+          return result;
+        };
+      var __awaiter =
+        (this && this.__awaiter) ||
+        function (thisArg, _arguments, P, generator) {
+          function adopt(value) {
+            return value instanceof P
+              ? value
+              : new P(function (resolve) {
+                  resolve(value);
+                });
+          }
+          return new (P || (P = Promise))(function (resolve, reject) {
+            function fulfilled(value) {
+              try {
+                step(generator.next(value));
+              } catch (e) {
+                reject(e);
+              }
+            }
+            function rejected(value) {
+              try {
+                step(generator['throw'](value));
+              } catch (e) {
+                reject(e);
+              }
+            }
+            function step(result) {
+              result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+            }
+            step((generator = generator.apply(thisArg, _arguments || [])).next());
+          });
+        };
+      Object.defineProperty(exports, '__esModule', { value: true });
+      exports.downloadCacheStorageSDK =
+        exports.downloadCacheHttpClientConcurrent =
+        exports.downloadCacheHttpClient =
+        exports.DownloadProgress =
+          void 0;
+      const core = __importStar(__nccwpck_require__(2186));
+      const http_client_1 = __nccwpck_require__(6255);
+      const storage_blob_1 = __nccwpck_require__(4100);
+      const buffer = __importStar(__nccwpck_require__(4293));
+      const fs = __importStar(__nccwpck_require__(5747));
+      const stream = __importStar(__nccwpck_require__(2413));
+      const util = __importStar(__nccwpck_require__(1669));
+      const utils = __importStar(__nccwpck_require__(1518));
+      const constants_1 = __nccwpck_require__(8840);
+      const requestUtils_1 = __nccwpck_require__(3981);
+      const abort_controller_1 = __nccwpck_require__(2557);
+      /**
+       * Pipes the body of a HTTP response to a stream
+       *
+       * @param response the HTTP response
+       * @param output the writable stream
+       */
+      function pipeResponseToStream(response, output) {
+        return __awaiter(this, void 0, void 0, function* () {
+          const pipeline = util.promisify(stream.pipeline);
+          yield pipeline(response.message, output);
+        });
+      }
+      /**
+       * Class for tracking the download state and displaying stats.
+       */
+      class DownloadProgress {
+        constructor(contentLength) {
+          this.contentLength = contentLength;
+          this.segmentIndex = 0;
+          this.segmentSize = 0;
+          this.segmentOffset = 0;
+          this.receivedBytes = 0;
+          this.displayedComplete = false;
+          this.startTime = Date.now();
+        }
+        /**
+         * Progress to the next segment. Only call this method when the previous segment
+         * is complete.
+         *
+         * @param segmentSize the length of the next segment
+         */
+        nextSegment(segmentSize) {
+          this.segmentOffset = this.segmentOffset + this.segmentSize;
+          this.segmentIndex = this.segmentIndex + 1;
+          this.segmentSize = segmentSize;
+          this.receivedBytes = 0;
+          core.debug(
+            `Downloading segment at offset ${this.segmentOffset} with length ${this.segmentSize}...`
+          );
+        }
+        /**
+         * Sets the number of bytes received for the current segment.
+         *
+         * @param receivedBytes the number of bytes received
+         */
+        setReceivedBytes(receivedBytes) {
+          this.receivedBytes = receivedBytes;
+        }
+        /**
+         * Returns the total number of bytes transferred.
+         */
+        getTransferredBytes() {
+          return this.segmentOffset + this.receivedBytes;
+        }
+        /**
+         * Returns true if the download is complete.
+         */
+        isDone() {
+          return this.getTransferredBytes() === this.contentLength;
+        }
+        /**
+         * Prints the current download stats. Once the download completes, this will print one
+         * last line and then stop.
+         */
+        display() {
+          if (this.displayedComplete) {
+            return;
+          }
+          const transferredBytes = this.segmentOffset + this.receivedBytes;
+          const percentage = (100 * (transferredBytes / this.contentLength)).toFixed(1);
+          const elapsedTime = Date.now() - this.startTime;
+          const downloadSpeed = (transferredBytes / (1024 * 1024) / (elapsedTime / 1000)).toFixed(
+            1
+          );
+          core.info(
+            `Received ${transferredBytes} of ${this.contentLength} (${percentage}%), ${downloadSpeed} MBs/sec`
+          );
+          if (this.isDone()) {
+            this.displayedComplete = true;
+          }
+        }
+        /**
+         * Returns a function used to handle TransferProgressEvents.
+         */
+        onProgress() {
+          return progress => {
+            this.setReceivedBytes(progress.loadedBytes);
+          };
+        }
+        /**
+         * Starts the timer that displays the stats.
+         *
+         * @param delayInMs the delay between each write
+         */
+        startDisplayTimer(delayInMs = 1000) {
+          const displayCallback = () => {
+            this.display();
+            if (!this.isDone()) {
+              this.timeoutHandle = setTimeout(displayCallback, delayInMs);
+            }
+          };
+          this.timeoutHandle = setTimeout(displayCallback, delayInMs);
+        }
+        /**
+         * Stops the timer that displays the stats. As this typically indicates the download
+         * is complete, this will display one last line, unless the last line has already
+         * been written.
+         */
+        stopDisplayTimer() {
+          if (this.timeoutHandle) {
+            clearTimeout(this.timeoutHandle);
+            this.timeoutHandle = undefined;
+          }
+          this.display();
+        }
+      }
+      exports.DownloadProgress = DownloadProgress;
+      /**
+       * Download the cache using the Actions toolkit http-client
+       *
+       * @param archiveLocation the URL for the cache
+       * @param archivePath the local path where the cache is saved
+       */
+      function downloadCacheHttpClient(archiveLocation, archivePath) {
+        return __awaiter(this, void 0, void 0, function* () {
+          const writeStream = fs.createWriteStream(archivePath);
+          const httpClient = new http_client_1.HttpClient('actions/cache');
+          const downloadResponse = yield (0, requestUtils_1.retryHttpClientResponse)(
+            'downloadCache',
+            () =>
+              __awaiter(this, void 0, void 0, function* () {
+                return httpClient.get(archiveLocation);
+              })
+          );
+          // Abort download if no traffic received over the socket.
+          downloadResponse.message.socket.setTimeout(constants_1.SocketTimeout, () => {
+            downloadResponse.message.destroy();
+            core.debug(`Aborting download, socket timed out after ${constants_1.SocketTimeout} ms`);
+          });
+          yield pipeResponseToStream(downloadResponse, writeStream);
+          // Validate download size.
+          const contentLengthHeader = downloadResponse.message.headers['content-length'];
+          if (contentLengthHeader) {
+            const expectedLength = parseInt(contentLengthHeader);
+            const actualLength = utils.getArchiveFileSizeInBytes(archivePath);
+            if (actualLength !== expectedLength) {
+              throw new Error(
+                `Incomplete download. Expected file size: ${expectedLength}, actual file size: ${actualLength}`
+              );
+            }
+          } else {
+            core.debug('Unable to validate download, no Content-Length header');
+          }
+        });
+      }
+      exports.downloadCacheHttpClient = downloadCacheHttpClient;
+      /**
+       * Download the cache using the Actions toolkit http-client concurrently
+       *
+       * @param archiveLocation the URL for the cache
+       * @param archivePath the local path where the cache is saved
+       */
+      function downloadCacheHttpClientConcurrent(archiveLocation, archivePath, options) {
+        var _a;
+        return __awaiter(this, void 0, void 0, function* () {
+          const archiveDescriptor = yield fs.promises.open(archivePath, 'w');
+          const httpClient = new http_client_1.HttpClient('actions/cache', undefined, {
+            socketTimeout: options.timeoutInMs,
+            keepAlive: true
+          });
+          try {
+            const res = yield (0, requestUtils_1.retryHttpClientResponse)(
+              'downloadCacheMetadata',
+              () =>
+                __awaiter(this, void 0, void 0, function* () {
+                  return yield httpClient.request('HEAD', archiveLocation, null, {});
+                })
+            );
+            const lengthHeader = res.message.headers['content-length'];
+            if (lengthHeader === undefined || lengthHeader === null) {
+              throw new Error('Content-Length not found on blob response');
+            }
+            const length = parseInt(lengthHeader);
+            if (Number.isNaN(length)) {
+              throw new Error(`Could not interpret Content-Length: ${length}`);
+            }
+            const downloads = [];
+            const blockSize = 4 * 1024 * 1024;
+            for (let offset = 0; offset < length; offset += blockSize) {
+              const count = Math.min(blockSize, length - offset);
+              downloads.push({
+                offset,
+                promiseGetter: () =>
+                  __awaiter(this, void 0, void 0, function* () {
+                    return yield downloadSegmentRetry(httpClient, archiveLocation, offset, count);
+                  })
+              });
+            }
+            // reverse to use .pop instead of .shift
+            downloads.reverse();
+            let actives = 0;
+            let bytesDownloaded = 0;
+            const progress = new DownloadProgress(length);
+            progress.startDisplayTimer();
+            const progressFn = progress.onProgress();
+            const activeDownloads = [];
+            let nextDownload;
+            const waitAndWrite = () =>
+              __awaiter(this, void 0, void 0, function* () {
+                const segment = yield Promise.race(Object.values(activeDownloads));
+                yield archiveDescriptor.write(segment.buffer, 0, segment.count, segment.offset);
+                actives--;
+                delete activeDownloads[segment.offset];
+                bytesDownloaded += segment.count;
+                progressFn({ loadedBytes: bytesDownloaded });
+              });
+            while ((nextDownload = downloads.pop())) {
+              activeDownloads[nextDownload.offset] = nextDownload.promiseGetter();
+              actives++;
+              if (
+                actives >= ((_a = options.downloadConcurrency) !== null && _a !== void 0 ? _a : 10)
+              ) {
+                yield waitAndWrite();
+              }
+            }
+            while (actives > 0) {
+              yield waitAndWrite();
+            }
+          } finally {
+            httpClient.dispose();
+            yield archiveDescriptor.close();
+          }
+        });
+      }
+      exports.downloadCacheHttpClientConcurrent = downloadCacheHttpClientConcurrent;
+      function downloadSegmentRetry(httpClient, archiveLocation, offset, count) {
+        return __awaiter(this, void 0, void 0, function* () {
+          const retries = 5;
+          let failures = 0;
+          while (true) {
+            try {
+              const timeout = 30000;
+              const result = yield promiseWithTimeout(
+                timeout,
+                downloadSegment(httpClient, archiveLocation, offset, count)
+              );
+              if (typeof result === 'string') {
+                throw new Error('downloadSegmentRetry failed due to timeout');
+              }
+              return result;
+            } catch (err) {
+              if (failures >= retries) {
+                throw err;
+              }
+              failures++;
+            }
+          }
+        });
+      }
+      function downloadSegment(httpClient, archiveLocation, offset, count) {
+        return __awaiter(this, void 0, void 0, function* () {
+          const partRes = yield (0, requestUtils_1.retryHttpClientResponse)(
+            'downloadCachePart',
+            () =>
+              __awaiter(this, void 0, void 0, function* () {
+                return yield httpClient.get(archiveLocation, {
+                  Range: `bytes=${offset}-${offset + count - 1}`
+                });
+              })
+          );
+          if (!partRes.readBodyBuffer) {
+            throw new Error('Expected HttpClientResponse to implement readBodyBuffer');
+          }
+          return {
+            offset,
+            count,
+            buffer: yield partRes.readBodyBuffer()
+          };
+        });
+      }
+      /**
+       * Download the cache using the Azure Storage SDK.  Only call this method if the
+       * URL points to an Azure Storage endpoint.
+       *
+       * @param archiveLocation the URL for the cache
+       * @param archivePath the local path where the cache is saved
+       * @param options the download options with the defaults set
+       */
+      function downloadCacheStorageSDK(archiveLocation, archivePath, options) {
+        var _a;
+        return __awaiter(this, void 0, void 0, function* () {
+          const client = new storage_blob_1.BlockBlobClient(archiveLocation, undefined, {
+            retryOptions: {
+              // Override the timeout used when downloading each 4 MB chunk
+              // The default is 2 min / MB, which is way too slow
+              tryTimeoutInMs: options.timeoutInMs
+            }
+          });
+          const properties = yield client.getProperties();
+          const contentLength = (_a = properties.contentLength) !== null && _a !== void 0 ? _a : -1;
+          if (contentLength < 0) {
+            // We should never hit this condition, but just in case fall back to downloading the
+            // file as one large stream
+            core.debug('Unable to determine content length, downloading file with http-client...');
+            yield downloadCacheHttpClient(archiveLocation, archivePath);
+          } else {
+            // Use downloadToBuffer for faster downloads, since internally it splits the
+            // file into 4 MB chunks which can then be parallelized and retried independently
+            //
+            // If the file exceeds the buffer maximum length (~1 GB on 32-bit systems and ~2 GB
+            // on 64-bit systems), split the download into multiple segments
+            // ~2 GB = 2147483647, beyond this, we start getting out of range error. So, capping it accordingly.
+            // Updated segment size to 128MB = 134217728 bytes, to complete a segment faster and fail fast
+            const maxSegmentSize = Math.min(134217728, buffer.constants.MAX_LENGTH);
+            const downloadProgress = new DownloadProgress(contentLength);
+            const fd = fs.openSync(archivePath, 'w');
+            try {
+              downloadProgress.startDisplayTimer();
+              const controller = new abort_controller_1.AbortController();
+              const abortSignal = controller.signal;
+              while (!downloadProgress.isDone()) {
+                const segmentStart = downloadProgress.segmentOffset + downloadProgress.segmentSize;
+                const segmentSize = Math.min(maxSegmentSize, contentLength - segmentStart);
+                downloadProgress.nextSegment(segmentSize);
+                const result = yield promiseWithTimeout(
+                  options.segmentTimeoutInMs || 3600000,
+                  client.downloadToBuffer(segmentStart, segmentSize, {
+                    abortSignal,
+                    concurrency: options.downloadConcurrency,
+                    onProgress: downloadProgress.onProgress()
+                  })
+                );
+                if (result === 'timeout') {
+                  controller.abort();
+                  throw new Error(
+                    'Aborting cache download as the download time exceeded the timeout.'
+                  );
+                } else if (Buffer.isBuffer(result)) {
+                  fs.writeFileSync(fd, result);
+                }
+              }
+            } finally {
+              downloadProgress.stopDisplayTimer();
+              fs.closeSync(fd);
+            }
+          }
+        });
+      }
+      exports.downloadCacheStorageSDK = downloadCacheStorageSDK;
+      const promiseWithTimeout = (timeoutMs, promise) =>
+        __awaiter(void 0, void 0, void 0, function* () {
+          let timeoutHandle;
+          const timeoutPromise = new Promise(resolve => {
+            timeoutHandle = setTimeout(() => resolve('timeout'), timeoutMs);
+          });
+          return Promise.race([promise, timeoutPromise]).then(result => {
+            clearTimeout(timeoutHandle);
+            return result;
+          });
+        });
+      //# sourceMappingURL=downloadUtils.js.map
+
+      /***/
+    },
+
+    /***/ 3981: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
+      'use strict';
+
+      var __createBinding =
+        (this && this.__createBinding) ||
+        (Object.create
+          ? function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              var desc = Object.getOwnPropertyDescriptor(m, k);
+              if (!desc || ('get' in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+                desc = {
+                  enumerable: true,
+                  get: function () {
+                    return m[k];
+                  }
+                };
+              }
+              Object.defineProperty(o, k2, desc);
+            }
+          : function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              o[k2] = m[k];
+            });
+      var __setModuleDefault =
+        (this && this.__setModuleDefault) ||
+        (Object.create
+          ? function (o, v) {
+              Object.defineProperty(o, 'default', { enumerable: true, value: v });
+            }
+          : function (o, v) {
+              o['default'] = v;
+            });
+      var __importStar =
+        (this && this.__importStar) ||
+        function (mod) {
+          if (mod && mod.__esModule) return mod;
+          var result = {};
+          if (mod != null)
+            for (var k in mod)
+              if (k !== 'default' && Object.prototype.hasOwnProperty.call(mod, k))
+                __createBinding(result, mod, k);
+          __setModuleDefault(result, mod);
+          return result;
+        };
+      var __awaiter =
+        (this && this.__awaiter) ||
+        function (thisArg, _arguments, P, generator) {
+          function adopt(value) {
+            return value instanceof P
+              ? value
+              : new P(function (resolve) {
+                  resolve(value);
+                });
+          }
+          return new (P || (P = Promise))(function (resolve, reject) {
+            function fulfilled(value) {
+              try {
+                step(generator.next(value));
+              } catch (e) {
+                reject(e);
+              }
+            }
+            function rejected(value) {
+              try {
+                step(generator['throw'](value));
+              } catch (e) {
+                reject(e);
+              }
+            }
+            function step(result) {
+              result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+            }
+            step((generator = generator.apply(thisArg, _arguments || [])).next());
+          });
+        };
+      Object.defineProperty(exports, '__esModule', { value: true });
+      exports.retryHttpClientResponse =
+        exports.retryTypedResponse =
+        exports.retry =
+        exports.isRetryableStatusCode =
+        exports.isServerErrorStatusCode =
+        exports.isSuccessStatusCode =
+          void 0;
+      const core = __importStar(__nccwpck_require__(2186));
+      const http_client_1 = __nccwpck_require__(6255);
+      const constants_1 = __nccwpck_require__(8840);
+      function isSuccessStatusCode(statusCode) {
+        if (!statusCode) {
+          return false;
+        }
+        return statusCode >= 200 && statusCode < 300;
+      }
+      exports.isSuccessStatusCode = isSuccessStatusCode;
+      function isServerErrorStatusCode(statusCode) {
+        if (!statusCode) {
+          return true;
+        }
+        return statusCode >= 500;
+      }
+      exports.isServerErrorStatusCode = isServerErrorStatusCode;
+      function isRetryableStatusCode(statusCode) {
+        if (!statusCode) {
+          return false;
+        }
+        const retryableStatusCodes = [
+          http_client_1.HttpCodes.BadGateway,
+          http_client_1.HttpCodes.ServiceUnavailable,
+          http_client_1.HttpCodes.GatewayTimeout
+        ];
+        return retryableStatusCodes.includes(statusCode);
+      }
+      exports.isRetryableStatusCode = isRetryableStatusCode;
+      function sleep(milliseconds) {
+        return __awaiter(this, void 0, void 0, function* () {
+          return new Promise(resolve => setTimeout(resolve, milliseconds));
+        });
+      }
+      function retry(
+        name,
+        method,
+        getStatusCode,
+        maxAttempts = constants_1.DefaultRetryAttempts,
+        delay = constants_1.DefaultRetryDelay,
+        onError = undefined
+      ) {
+        return __awaiter(this, void 0, void 0, function* () {
+          let errorMessage = '';
+          let attempt = 1;
+          while (attempt <= maxAttempts) {
+            let response = undefined;
+            let statusCode = undefined;
+            let isRetryable = false;
+            try {
+              response = yield method();
+            } catch (error) {
+              if (onError) {
+                response = onError(error);
+              }
+              isRetryable = true;
+              errorMessage = error.message;
+            }
+            if (response) {
+              statusCode = getStatusCode(response);
+              if (!isServerErrorStatusCode(statusCode)) {
+                return response;
+              }
+            }
+            if (statusCode) {
+              isRetryable = isRetryableStatusCode(statusCode);
+              errorMessage = `Cache service responded with ${statusCode}`;
+            }
+            core.debug(
+              `${name} - Attempt ${attempt} of ${maxAttempts} failed with error: ${errorMessage}`
+            );
+            if (!isRetryable) {
+              core.debug(`${name} - Error is not retryable`);
+              break;
+            }
+            yield sleep(delay);
+            attempt++;
+          }
+          throw Error(`${name} failed: ${errorMessage}`);
+        });
+      }
+      exports.retry = retry;
+      function retryTypedResponse(
+        name,
+        method,
+        maxAttempts = constants_1.DefaultRetryAttempts,
+        delay = constants_1.DefaultRetryDelay
+      ) {
+        return __awaiter(this, void 0, void 0, function* () {
+          return yield retry(
+            name,
+            method,
+            response => response.statusCode,
+            maxAttempts,
+            delay,
+            // If the error object contains the statusCode property, extract it and return
+            // an TypedResponse<T> so it can be processed by the retry logic.
+            error => {
+              if (error instanceof http_client_1.HttpClientError) {
+                return {
+                  statusCode: error.statusCode,
+                  result: null,
+                  headers: {},
+                  error
+                };
+              } else {
+                return undefined;
+              }
+            }
+          );
+        });
+      }
+      exports.retryTypedResponse = retryTypedResponse;
+      function retryHttpClientResponse(
+        name,
+        method,
+        maxAttempts = constants_1.DefaultRetryAttempts,
+        delay = constants_1.DefaultRetryDelay
+      ) {
+        return __awaiter(this, void 0, void 0, function* () {
+          return yield retry(
+            name,
+            method,
+            response => response.message.statusCode,
+            maxAttempts,
+            delay
+          );
+        });
+      }
+      exports.retryHttpClientResponse = retryHttpClientResponse;
+      //# sourceMappingURL=requestUtils.js.map
+
+      /***/
+    },
+
+    /***/ 6490: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
+      'use strict';
+
+      var __createBinding =
+        (this && this.__createBinding) ||
+        (Object.create
+          ? function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              var desc = Object.getOwnPropertyDescriptor(m, k);
+              if (!desc || ('get' in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+                desc = {
+                  enumerable: true,
+                  get: function () {
+                    return m[k];
+                  }
+                };
+              }
+              Object.defineProperty(o, k2, desc);
+            }
+          : function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              o[k2] = m[k];
+            });
+      var __setModuleDefault =
+        (this && this.__setModuleDefault) ||
+        (Object.create
+          ? function (o, v) {
+              Object.defineProperty(o, 'default', { enumerable: true, value: v });
+            }
+          : function (o, v) {
+              o['default'] = v;
+            });
+      var __importStar =
+        (this && this.__importStar) ||
+        function (mod) {
+          if (mod && mod.__esModule) return mod;
+          var result = {};
+          if (mod != null)
+            for (var k in mod)
+              if (k !== 'default' && Object.prototype.hasOwnProperty.call(mod, k))
+                __createBinding(result, mod, k);
+          __setModuleDefault(result, mod);
+          return result;
+        };
+      var __awaiter =
+        (this && this.__awaiter) ||
+        function (thisArg, _arguments, P, generator) {
+          function adopt(value) {
+            return value instanceof P
+              ? value
+              : new P(function (resolve) {
+                  resolve(value);
+                });
+          }
+          return new (P || (P = Promise))(function (resolve, reject) {
+            function fulfilled(value) {
+              try {
+                step(generator.next(value));
+              } catch (e) {
+                reject(e);
+              }
+            }
+            function rejected(value) {
+              try {
+                step(generator['throw'](value));
+              } catch (e) {
+                reject(e);
+              }
+            }
+            function step(result) {
+              result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+            }
+            step((generator = generator.apply(thisArg, _arguments || [])).next());
+          });
+        };
+      Object.defineProperty(exports, '__esModule', { value: true });
+      exports.createTar = exports.extractTar = exports.listTar = void 0;
+      const exec_1 = __nccwpck_require__(1514);
+      const io = __importStar(__nccwpck_require__(7436));
+      const fs_1 = __nccwpck_require__(5747);
+      const path = __importStar(__nccwpck_require__(5622));
+      const utils = __importStar(__nccwpck_require__(1518));
+      const constants_1 = __nccwpck_require__(8840);
+      const IS_WINDOWS = process.platform === 'win32';
+      // Returns tar path and type: BSD or GNU
+      function getTarPath() {
+        return __awaiter(this, void 0, void 0, function* () {
+          switch (process.platform) {
+            case 'win32': {
+              const gnuTar = yield utils.getGnuTarPathOnWindows();
+              const systemTar = constants_1.SystemTarPathOnWindows;
+              if (gnuTar) {
+                // Use GNUtar as default on windows
+                return { path: gnuTar, type: constants_1.ArchiveToolType.GNU };
+              } else if ((0, fs_1.existsSync)(systemTar)) {
+                return { path: systemTar, type: constants_1.ArchiveToolType.BSD };
+              }
+              break;
+            }
+            case 'darwin': {
+              const gnuTar = yield io.which('gtar', false);
+              if (gnuTar) {
+                // fix permission denied errors when extracting BSD tar archive with GNU tar - https://github.com/actions/cache/issues/527
+                return { path: gnuTar, type: constants_1.ArchiveToolType.GNU };
+              } else {
+                return {
+                  path: yield io.which('tar', true),
+                  type: constants_1.ArchiveToolType.BSD
+                };
+              }
+            }
+            default:
+              break;
+          }
+          // Default assumption is GNU tar is present in path
+          return {
+            path: yield io.which('tar', true),
+            type: constants_1.ArchiveToolType.GNU
+          };
+        });
+      }
+      // Return arguments for tar as per tarPath, compressionMethod, method type and os
+      function getTarArgs(tarPath, compressionMethod, type, archivePath = '') {
+        return __awaiter(this, void 0, void 0, function* () {
+          const args = [`"${tarPath.path}"`];
+          const cacheFileName = utils.getCacheFileName(compressionMethod);
+          const tarFile = 'cache.tar';
+          const workingDirectory = getWorkingDirectory();
+          // Speficic args for BSD tar on windows for workaround
+          const BSD_TAR_ZSTD =
+            tarPath.type === constants_1.ArchiveToolType.BSD &&
+            compressionMethod !== constants_1.CompressionMethod.Gzip &&
+            IS_WINDOWS;
+          // Method specific args
+          switch (type) {
+            case 'create':
+              args.push(
+                '--posix',
+                '-cf',
+                BSD_TAR_ZSTD
+                  ? tarFile
+                  : cacheFileName.replace(new RegExp(`\\${path.sep}`, 'g'), '/'),
+                '--exclude',
+                BSD_TAR_ZSTD
+                  ? tarFile
+                  : cacheFileName.replace(new RegExp(`\\${path.sep}`, 'g'), '/'),
+                '-P',
+                '-C',
+                workingDirectory.replace(new RegExp(`\\${path.sep}`, 'g'), '/'),
+                '--files-from',
+                constants_1.ManifestFilename
+              );
+              break;
+            case 'extract':
+              args.push(
+                '-xf',
+                BSD_TAR_ZSTD ? tarFile : archivePath.replace(new RegExp(`\\${path.sep}`, 'g'), '/'),
+                '-P',
+                '-C',
+                workingDirectory.replace(new RegExp(`\\${path.sep}`, 'g'), '/')
+              );
+              break;
+            case 'list':
+              args.push(
+                '-tf',
+                BSD_TAR_ZSTD ? tarFile : archivePath.replace(new RegExp(`\\${path.sep}`, 'g'), '/'),
+                '-P'
+              );
+              break;
+          }
+          // Platform specific args
+          if (tarPath.type === constants_1.ArchiveToolType.GNU) {
+            switch (process.platform) {
+              case 'win32':
+                args.push('--force-local');
+                break;
+              case 'darwin':
+                args.push('--delay-directory-restore');
+                break;
+            }
+          }
+          return args;
+        });
+      }
+      // Returns commands to run tar and compression program
+      function getCommands(compressionMethod, type, archivePath = '') {
+        return __awaiter(this, void 0, void 0, function* () {
+          let args;
+          const tarPath = yield getTarPath();
+          const tarArgs = yield getTarArgs(tarPath, compressionMethod, type, archivePath);
+          const compressionArgs =
+            type !== 'create'
+              ? yield getDecompressionProgram(tarPath, compressionMethod, archivePath)
+              : yield getCompressionProgram(tarPath, compressionMethod);
+          const BSD_TAR_ZSTD =
+            tarPath.type === constants_1.ArchiveToolType.BSD &&
+            compressionMethod !== constants_1.CompressionMethod.Gzip &&
+            IS_WINDOWS;
+          if (BSD_TAR_ZSTD && type !== 'create') {
+            args = [[...compressionArgs].join(' '), [...tarArgs].join(' ')];
+          } else {
+            args = [[...tarArgs].join(' '), [...compressionArgs].join(' ')];
+          }
+          if (BSD_TAR_ZSTD) {
+            return args;
+          }
+          return [args.join(' ')];
+        });
+      }
+      function getWorkingDirectory() {
+        var _a;
+        return (_a = process.env['GITHUB_WORKSPACE']) !== null && _a !== void 0
+          ? _a
+          : process.cwd();
+      }
+      // Common function for extractTar and listTar to get the compression method
+      function getDecompressionProgram(tarPath, compressionMethod, archivePath) {
+        return __awaiter(this, void 0, void 0, function* () {
+          // -d: Decompress.
+          // unzstd is equivalent to 'zstd -d'
+          // --long=#: Enables long distance matching with # bits. Maximum is 30 (1GB) on 32-bit OS and 31 (2GB) on 64-bit.
+          // Using 30 here because we also support 32-bit self-hosted runners.
+          const BSD_TAR_ZSTD =
+            tarPath.type === constants_1.ArchiveToolType.BSD &&
+            compressionMethod !== constants_1.CompressionMethod.Gzip &&
+            IS_WINDOWS;
+          switch (compressionMethod) {
+            case constants_1.CompressionMethod.Zstd:
+              return BSD_TAR_ZSTD
+                ? [
+                    'zstd -d --long=30 --force -o',
+                    constants_1.TarFilename,
+                    archivePath.replace(new RegExp(`\\${path.sep}`, 'g'), '/')
+                  ]
+                : [
+                    '--use-compress-program',
+                    IS_WINDOWS ? '"zstd -d --long=30"' : 'unzstd --long=30'
+                  ];
+            case constants_1.CompressionMethod.ZstdWithoutLong:
+              return BSD_TAR_ZSTD
+                ? [
+                    'zstd -d --force -o',
+                    constants_1.TarFilename,
+                    archivePath.replace(new RegExp(`\\${path.sep}`, 'g'), '/')
+                  ]
+                : ['--use-compress-program', IS_WINDOWS ? '"zstd -d"' : 'unzstd'];
+            default:
+              return ['-z'];
+          }
+        });
+      }
+      // Used for creating the archive
+      // -T#: Compress using # working thread. If # is 0, attempt to detect and use the number of physical CPU cores.
+      // zstdmt is equivalent to 'zstd -T0'
+      // --long=#: Enables long distance matching with # bits. Maximum is 30 (1GB) on 32-bit OS and 31 (2GB) on 64-bit.
+      // Using 30 here because we also support 32-bit self-hosted runners.
+      // Long range mode is added to zstd in v1.3.2 release, so we will not use --long in older version of zstd.
+      function getCompressionProgram(tarPath, compressionMethod) {
+        return __awaiter(this, void 0, void 0, function* () {
+          const cacheFileName = utils.getCacheFileName(compressionMethod);
+          const BSD_TAR_ZSTD =
+            tarPath.type === constants_1.ArchiveToolType.BSD &&
+            compressionMethod !== constants_1.CompressionMethod.Gzip &&
+            IS_WINDOWS;
+          switch (compressionMethod) {
+            case constants_1.CompressionMethod.Zstd:
+              return BSD_TAR_ZSTD
+                ? [
+                    'zstd -T0 --long=30 --force -o',
+                    cacheFileName.replace(new RegExp(`\\${path.sep}`, 'g'), '/'),
+                    constants_1.TarFilename
+                  ]
+                : [
+                    '--use-compress-program',
+                    IS_WINDOWS ? '"zstd -T0 --long=30"' : 'zstdmt --long=30'
+                  ];
+            case constants_1.CompressionMethod.ZstdWithoutLong:
+              return BSD_TAR_ZSTD
+                ? [
+                    'zstd -T0 --force -o',
+                    cacheFileName.replace(new RegExp(`\\${path.sep}`, 'g'), '/'),
+                    constants_1.TarFilename
+                  ]
+                : ['--use-compress-program', IS_WINDOWS ? '"zstd -T0"' : 'zstdmt'];
+            default:
+              return ['-z'];
+          }
+        });
+      }
+      // Executes all commands as separate processes
+      function execCommands(commands, cwd) {
+        return __awaiter(this, void 0, void 0, function* () {
+          for (const command of commands) {
+            try {
+              yield (0, exec_1.exec)(command, undefined, {
+                cwd,
+                env: Object.assign(Object.assign({}, process.env), {
+                  MSYS: 'winsymlinks:nativestrict'
+                })
+              });
+            } catch (error) {
+              throw new Error(
+                `${command.split(' ')[0]} failed with error: ${
+                  error === null || error === void 0 ? void 0 : error.message
+                }`
+              );
+            }
+          }
+        });
+      }
+      // List the contents of a tar
+      function listTar(archivePath, compressionMethod) {
+        return __awaiter(this, void 0, void 0, function* () {
+          const commands = yield getCommands(compressionMethod, 'list', archivePath);
+          yield execCommands(commands);
+        });
+      }
+      exports.listTar = listTar;
+      // Extract a tar
+      function extractTar(archivePath, compressionMethod) {
+        return __awaiter(this, void 0, void 0, function* () {
+          // Create directory to extract tar into
+          const workingDirectory = getWorkingDirectory();
+          yield io.mkdirP(workingDirectory);
+          const commands = yield getCommands(compressionMethod, 'extract', archivePath);
+          yield execCommands(commands);
+        });
+      }
+      exports.extractTar = extractTar;
+      // Create a tar
+      function createTar(archiveFolder, sourceDirectories, compressionMethod) {
+        return __awaiter(this, void 0, void 0, function* () {
+          // Write source directories to manifest.txt to avoid command length limits
+          (0,
+          fs_1.writeFileSync)(path.join(archiveFolder, constants_1.ManifestFilename), sourceDirectories.join('\n'));
+          const commands = yield getCommands(compressionMethod, 'create');
+          yield execCommands(commands, archiveFolder);
+        });
+      }
+      exports.createTar = createTar;
+      //# sourceMappingURL=tar.js.map
+
+      /***/
+    },
+
+    /***/ 6215: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
+      'use strict';
+
+      var __createBinding =
+        (this && this.__createBinding) ||
+        (Object.create
+          ? function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              var desc = Object.getOwnPropertyDescriptor(m, k);
+              if (!desc || ('get' in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+                desc = {
+                  enumerable: true,
+                  get: function () {
+                    return m[k];
+                  }
+                };
+              }
+              Object.defineProperty(o, k2, desc);
+            }
+          : function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              o[k2] = m[k];
+            });
+      var __setModuleDefault =
+        (this && this.__setModuleDefault) ||
+        (Object.create
+          ? function (o, v) {
+              Object.defineProperty(o, 'default', { enumerable: true, value: v });
+            }
+          : function (o, v) {
+              o['default'] = v;
+            });
+      var __importStar =
+        (this && this.__importStar) ||
+        function (mod) {
+          if (mod && mod.__esModule) return mod;
+          var result = {};
+          if (mod != null)
+            for (var k in mod)
+              if (k !== 'default' && Object.prototype.hasOwnProperty.call(mod, k))
+                __createBinding(result, mod, k);
+          __setModuleDefault(result, mod);
+          return result;
+        };
+      Object.defineProperty(exports, '__esModule', { value: true });
+      exports.getDownloadOptions = exports.getUploadOptions = void 0;
+      const core = __importStar(__nccwpck_require__(2186));
+      /**
+       * Returns a copy of the upload options with defaults filled in.
+       *
+       * @param copy the original upload options
+       */
+      function getUploadOptions(copy) {
+        const result = {
+          uploadConcurrency: 4,
+          uploadChunkSize: 32 * 1024 * 1024
+        };
+        if (copy) {
+          if (typeof copy.uploadConcurrency === 'number') {
+            result.uploadConcurrency = copy.uploadConcurrency;
+          }
+          if (typeof copy.uploadChunkSize === 'number') {
+            result.uploadChunkSize = copy.uploadChunkSize;
+          }
+        }
+        core.debug(`Upload concurrency: ${result.uploadConcurrency}`);
+        core.debug(`Upload chunk size: ${result.uploadChunkSize}`);
+        return result;
+      }
+      exports.getUploadOptions = getUploadOptions;
+      /**
+       * Returns a copy of the download options with defaults filled in.
+       *
+       * @param copy the original download options
+       */
+      function getDownloadOptions(copy) {
+        const result = {
+          useAzureSdk: false,
+          concurrentBlobDownloads: true,
+          downloadConcurrency: 8,
+          timeoutInMs: 30000,
+          segmentTimeoutInMs: 600000,
+          lookupOnly: false
+        };
+        if (copy) {
+          if (typeof copy.useAzureSdk === 'boolean') {
+            result.useAzureSdk = copy.useAzureSdk;
+          }
+          if (typeof copy.concurrentBlobDownloads === 'boolean') {
+            result.concurrentBlobDownloads = copy.concurrentBlobDownloads;
+          }
+          if (typeof copy.downloadConcurrency === 'number') {
+            result.downloadConcurrency = copy.downloadConcurrency;
+          }
+          if (typeof copy.timeoutInMs === 'number') {
+            result.timeoutInMs = copy.timeoutInMs;
+          }
+          if (typeof copy.segmentTimeoutInMs === 'number') {
+            result.segmentTimeoutInMs = copy.segmentTimeoutInMs;
+          }
+          if (typeof copy.lookupOnly === 'boolean') {
+            result.lookupOnly = copy.lookupOnly;
+          }
+        }
+        const segmentDownloadTimeoutMins = process.env['SEGMENT_DOWNLOAD_TIMEOUT_MINS'];
+        if (
+          segmentDownloadTimeoutMins &&
+          !isNaN(Number(segmentDownloadTimeoutMins)) &&
+          isFinite(Number(segmentDownloadTimeoutMins))
+        ) {
+          result.segmentTimeoutInMs = Number(segmentDownloadTimeoutMins) * 60 * 1000;
+        }
+        core.debug(`Use Azure SDK: ${result.useAzureSdk}`);
+        core.debug(`Download concurrency: ${result.downloadConcurrency}`);
+        core.debug(`Request timeout (ms): ${result.timeoutInMs}`);
+        core.debug(
+          `Cache segment download timeout mins env var: ${process.env['SEGMENT_DOWNLOAD_TIMEOUT_MINS']}`
+        );
+        core.debug(`Segment download timeout (ms): ${result.segmentTimeoutInMs}`);
+        core.debug(`Lookup only: ${result.lookupOnly}`);
+        return result;
+      }
+      exports.getDownloadOptions = getDownloadOptions;
+      //# sourceMappingURL=options.js.map
+
+      /***/
+    },
+
     /***/ 7351: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
       'use strict';
 
@@ -686,8 +2890,8 @@
         };
       Object.defineProperty(exports, '__esModule', { value: true });
       exports.OidcClient = void 0;
-      const http_client_1 = __nccwpck_require__(1404);
-      const auth_1 = __nccwpck_require__(6758);
+      const http_client_1 = __nccwpck_require__(6255);
+      const auth_1 = __nccwpck_require__(5526);
       const core_1 = __nccwpck_require__(2186);
       class OidcClient {
         static createHttpClient(allowRetry = true, maxRetry = 10) {
@@ -722,7 +2926,7 @@
             const res = yield httpclient.getJson(id_token_url).catch(error => {
               throw new Error(`Failed to get ID Token. \n 
         Error Code : ${error.statusCode}\n 
-        Error Message: ${error.result.message}`);
+        Error Message: ${error.message}`);
             });
             const id_token = (_a = res.result) === null || _a === void 0 ? void 0 : _a.value;
             if (!id_token) {
@@ -1201,883 +3405,6 @@
       }
       exports.toCommandProperties = toCommandProperties;
       //# sourceMappingURL=utils.js.map
-
-      /***/
-    },
-
-    /***/ 6758: /***/ function (__unused_webpack_module, exports) {
-      'use strict';
-
-      var __awaiter =
-        (this && this.__awaiter) ||
-        function (thisArg, _arguments, P, generator) {
-          function adopt(value) {
-            return value instanceof P
-              ? value
-              : new P(function (resolve) {
-                  resolve(value);
-                });
-          }
-          return new (P || (P = Promise))(function (resolve, reject) {
-            function fulfilled(value) {
-              try {
-                step(generator.next(value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-            function rejected(value) {
-              try {
-                step(generator['throw'](value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-            function step(result) {
-              result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
-            }
-            step((generator = generator.apply(thisArg, _arguments || [])).next());
-          });
-        };
-      Object.defineProperty(exports, '__esModule', { value: true });
-      exports.PersonalAccessTokenCredentialHandler =
-        exports.BearerCredentialHandler =
-        exports.BasicCredentialHandler =
-          void 0;
-      class BasicCredentialHandler {
-        constructor(username, password) {
-          this.username = username;
-          this.password = password;
-        }
-        prepareRequest(options) {
-          if (!options.headers) {
-            throw Error('The request has no headers');
-          }
-          options.headers['Authorization'] = `Basic ${Buffer.from(
-            `${this.username}:${this.password}`
-          ).toString('base64')}`;
-        }
-        // This handler cannot handle 401
-        canHandleAuthentication() {
-          return false;
-        }
-        handleAuthentication() {
-          return __awaiter(this, void 0, void 0, function* () {
-            throw new Error('not implemented');
-          });
-        }
-      }
-      exports.BasicCredentialHandler = BasicCredentialHandler;
-      class BearerCredentialHandler {
-        constructor(token) {
-          this.token = token;
-        }
-        // currently implements pre-authorization
-        // TODO: support preAuth = false where it hooks on 401
-        prepareRequest(options) {
-          if (!options.headers) {
-            throw Error('The request has no headers');
-          }
-          options.headers['Authorization'] = `Bearer ${this.token}`;
-        }
-        // This handler cannot handle 401
-        canHandleAuthentication() {
-          return false;
-        }
-        handleAuthentication() {
-          return __awaiter(this, void 0, void 0, function* () {
-            throw new Error('not implemented');
-          });
-        }
-      }
-      exports.BearerCredentialHandler = BearerCredentialHandler;
-      class PersonalAccessTokenCredentialHandler {
-        constructor(token) {
-          this.token = token;
-        }
-        // currently implements pre-authorization
-        // TODO: support preAuth = false where it hooks on 401
-        prepareRequest(options) {
-          if (!options.headers) {
-            throw Error('The request has no headers');
-          }
-          options.headers['Authorization'] = `Basic ${Buffer.from(`PAT:${this.token}`).toString(
-            'base64'
-          )}`;
-        }
-        // This handler cannot handle 401
-        canHandleAuthentication() {
-          return false;
-        }
-        handleAuthentication() {
-          return __awaiter(this, void 0, void 0, function* () {
-            throw new Error('not implemented');
-          });
-        }
-      }
-      exports.PersonalAccessTokenCredentialHandler = PersonalAccessTokenCredentialHandler;
-      //# sourceMappingURL=auth.js.map
-
-      /***/
-    },
-
-    /***/ 1404: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
-      'use strict';
-
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      var __createBinding =
-        (this && this.__createBinding) ||
-        (Object.create
-          ? function (o, m, k, k2) {
-              if (k2 === undefined) k2 = k;
-              Object.defineProperty(o, k2, {
-                enumerable: true,
-                get: function () {
-                  return m[k];
-                }
-              });
-            }
-          : function (o, m, k, k2) {
-              if (k2 === undefined) k2 = k;
-              o[k2] = m[k];
-            });
-      var __setModuleDefault =
-        (this && this.__setModuleDefault) ||
-        (Object.create
-          ? function (o, v) {
-              Object.defineProperty(o, 'default', { enumerable: true, value: v });
-            }
-          : function (o, v) {
-              o['default'] = v;
-            });
-      var __importStar =
-        (this && this.__importStar) ||
-        function (mod) {
-          if (mod && mod.__esModule) return mod;
-          var result = {};
-          if (mod != null)
-            for (var k in mod)
-              if (k !== 'default' && Object.hasOwnProperty.call(mod, k))
-                __createBinding(result, mod, k);
-          __setModuleDefault(result, mod);
-          return result;
-        };
-      var __awaiter =
-        (this && this.__awaiter) ||
-        function (thisArg, _arguments, P, generator) {
-          function adopt(value) {
-            return value instanceof P
-              ? value
-              : new P(function (resolve) {
-                  resolve(value);
-                });
-          }
-          return new (P || (P = Promise))(function (resolve, reject) {
-            function fulfilled(value) {
-              try {
-                step(generator.next(value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-            function rejected(value) {
-              try {
-                step(generator['throw'](value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-            function step(result) {
-              result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
-            }
-            step((generator = generator.apply(thisArg, _arguments || [])).next());
-          });
-        };
-      Object.defineProperty(exports, '__esModule', { value: true });
-      exports.HttpClient =
-        exports.isHttps =
-        exports.HttpClientResponse =
-        exports.HttpClientError =
-        exports.getProxyUrl =
-        exports.MediaTypes =
-        exports.Headers =
-        exports.HttpCodes =
-          void 0;
-      const http = __importStar(__nccwpck_require__(8605));
-      const https = __importStar(__nccwpck_require__(7211));
-      const pm = __importStar(__nccwpck_require__(2843));
-      const tunnel = __importStar(__nccwpck_require__(4294));
-      var HttpCodes;
-      (function (HttpCodes) {
-        HttpCodes[(HttpCodes['OK'] = 200)] = 'OK';
-        HttpCodes[(HttpCodes['MultipleChoices'] = 300)] = 'MultipleChoices';
-        HttpCodes[(HttpCodes['MovedPermanently'] = 301)] = 'MovedPermanently';
-        HttpCodes[(HttpCodes['ResourceMoved'] = 302)] = 'ResourceMoved';
-        HttpCodes[(HttpCodes['SeeOther'] = 303)] = 'SeeOther';
-        HttpCodes[(HttpCodes['NotModified'] = 304)] = 'NotModified';
-        HttpCodes[(HttpCodes['UseProxy'] = 305)] = 'UseProxy';
-        HttpCodes[(HttpCodes['SwitchProxy'] = 306)] = 'SwitchProxy';
-        HttpCodes[(HttpCodes['TemporaryRedirect'] = 307)] = 'TemporaryRedirect';
-        HttpCodes[(HttpCodes['PermanentRedirect'] = 308)] = 'PermanentRedirect';
-        HttpCodes[(HttpCodes['BadRequest'] = 400)] = 'BadRequest';
-        HttpCodes[(HttpCodes['Unauthorized'] = 401)] = 'Unauthorized';
-        HttpCodes[(HttpCodes['PaymentRequired'] = 402)] = 'PaymentRequired';
-        HttpCodes[(HttpCodes['Forbidden'] = 403)] = 'Forbidden';
-        HttpCodes[(HttpCodes['NotFound'] = 404)] = 'NotFound';
-        HttpCodes[(HttpCodes['MethodNotAllowed'] = 405)] = 'MethodNotAllowed';
-        HttpCodes[(HttpCodes['NotAcceptable'] = 406)] = 'NotAcceptable';
-        HttpCodes[(HttpCodes['ProxyAuthenticationRequired'] = 407)] = 'ProxyAuthenticationRequired';
-        HttpCodes[(HttpCodes['RequestTimeout'] = 408)] = 'RequestTimeout';
-        HttpCodes[(HttpCodes['Conflict'] = 409)] = 'Conflict';
-        HttpCodes[(HttpCodes['Gone'] = 410)] = 'Gone';
-        HttpCodes[(HttpCodes['TooManyRequests'] = 429)] = 'TooManyRequests';
-        HttpCodes[(HttpCodes['InternalServerError'] = 500)] = 'InternalServerError';
-        HttpCodes[(HttpCodes['NotImplemented'] = 501)] = 'NotImplemented';
-        HttpCodes[(HttpCodes['BadGateway'] = 502)] = 'BadGateway';
-        HttpCodes[(HttpCodes['ServiceUnavailable'] = 503)] = 'ServiceUnavailable';
-        HttpCodes[(HttpCodes['GatewayTimeout'] = 504)] = 'GatewayTimeout';
-      })((HttpCodes = exports.HttpCodes || (exports.HttpCodes = {})));
-      var Headers;
-      (function (Headers) {
-        Headers['Accept'] = 'accept';
-        Headers['ContentType'] = 'content-type';
-      })((Headers = exports.Headers || (exports.Headers = {})));
-      var MediaTypes;
-      (function (MediaTypes) {
-        MediaTypes['ApplicationJson'] = 'application/json';
-      })((MediaTypes = exports.MediaTypes || (exports.MediaTypes = {})));
-      /**
-       * Returns the proxy URL, depending upon the supplied url and proxy environment variables.
-       * @param serverUrl  The server URL where the request will be sent. For example, https://api.github.com
-       */
-      function getProxyUrl(serverUrl) {
-        const proxyUrl = pm.getProxyUrl(new URL(serverUrl));
-        return proxyUrl ? proxyUrl.href : '';
-      }
-      exports.getProxyUrl = getProxyUrl;
-      const HttpRedirectCodes = [
-        HttpCodes.MovedPermanently,
-        HttpCodes.ResourceMoved,
-        HttpCodes.SeeOther,
-        HttpCodes.TemporaryRedirect,
-        HttpCodes.PermanentRedirect
-      ];
-      const HttpResponseRetryCodes = [
-        HttpCodes.BadGateway,
-        HttpCodes.ServiceUnavailable,
-        HttpCodes.GatewayTimeout
-      ];
-      const RetryableHttpVerbs = ['OPTIONS', 'GET', 'DELETE', 'HEAD'];
-      const ExponentialBackoffCeiling = 10;
-      const ExponentialBackoffTimeSlice = 5;
-      class HttpClientError extends Error {
-        constructor(message, statusCode) {
-          super(message);
-          this.name = 'HttpClientError';
-          this.statusCode = statusCode;
-          Object.setPrototypeOf(this, HttpClientError.prototype);
-        }
-      }
-      exports.HttpClientError = HttpClientError;
-      class HttpClientResponse {
-        constructor(message) {
-          this.message = message;
-        }
-        readBody() {
-          return __awaiter(this, void 0, void 0, function* () {
-            return new Promise(resolve =>
-              __awaiter(this, void 0, void 0, function* () {
-                let output = Buffer.alloc(0);
-                this.message.on('data', chunk => {
-                  output = Buffer.concat([output, chunk]);
-                });
-                this.message.on('end', () => {
-                  resolve(output.toString());
-                });
-              })
-            );
-          });
-        }
-      }
-      exports.HttpClientResponse = HttpClientResponse;
-      function isHttps(requestUrl) {
-        const parsedUrl = new URL(requestUrl);
-        return parsedUrl.protocol === 'https:';
-      }
-      exports.isHttps = isHttps;
-      class HttpClient {
-        constructor(userAgent, handlers, requestOptions) {
-          this._ignoreSslError = false;
-          this._allowRedirects = true;
-          this._allowRedirectDowngrade = false;
-          this._maxRedirects = 50;
-          this._allowRetries = false;
-          this._maxRetries = 1;
-          this._keepAlive = false;
-          this._disposed = false;
-          this.userAgent = userAgent;
-          this.handlers = handlers || [];
-          this.requestOptions = requestOptions;
-          if (requestOptions) {
-            if (requestOptions.ignoreSslError != null) {
-              this._ignoreSslError = requestOptions.ignoreSslError;
-            }
-            this._socketTimeout = requestOptions.socketTimeout;
-            if (requestOptions.allowRedirects != null) {
-              this._allowRedirects = requestOptions.allowRedirects;
-            }
-            if (requestOptions.allowRedirectDowngrade != null) {
-              this._allowRedirectDowngrade = requestOptions.allowRedirectDowngrade;
-            }
-            if (requestOptions.maxRedirects != null) {
-              this._maxRedirects = Math.max(requestOptions.maxRedirects, 0);
-            }
-            if (requestOptions.keepAlive != null) {
-              this._keepAlive = requestOptions.keepAlive;
-            }
-            if (requestOptions.allowRetries != null) {
-              this._allowRetries = requestOptions.allowRetries;
-            }
-            if (requestOptions.maxRetries != null) {
-              this._maxRetries = requestOptions.maxRetries;
-            }
-          }
-        }
-        options(requestUrl, additionalHeaders) {
-          return __awaiter(this, void 0, void 0, function* () {
-            return this.request('OPTIONS', requestUrl, null, additionalHeaders || {});
-          });
-        }
-        get(requestUrl, additionalHeaders) {
-          return __awaiter(this, void 0, void 0, function* () {
-            return this.request('GET', requestUrl, null, additionalHeaders || {});
-          });
-        }
-        del(requestUrl, additionalHeaders) {
-          return __awaiter(this, void 0, void 0, function* () {
-            return this.request('DELETE', requestUrl, null, additionalHeaders || {});
-          });
-        }
-        post(requestUrl, data, additionalHeaders) {
-          return __awaiter(this, void 0, void 0, function* () {
-            return this.request('POST', requestUrl, data, additionalHeaders || {});
-          });
-        }
-        patch(requestUrl, data, additionalHeaders) {
-          return __awaiter(this, void 0, void 0, function* () {
-            return this.request('PATCH', requestUrl, data, additionalHeaders || {});
-          });
-        }
-        put(requestUrl, data, additionalHeaders) {
-          return __awaiter(this, void 0, void 0, function* () {
-            return this.request('PUT', requestUrl, data, additionalHeaders || {});
-          });
-        }
-        head(requestUrl, additionalHeaders) {
-          return __awaiter(this, void 0, void 0, function* () {
-            return this.request('HEAD', requestUrl, null, additionalHeaders || {});
-          });
-        }
-        sendStream(verb, requestUrl, stream, additionalHeaders) {
-          return __awaiter(this, void 0, void 0, function* () {
-            return this.request(verb, requestUrl, stream, additionalHeaders);
-          });
-        }
-        /**
-         * Gets a typed object from an endpoint
-         * Be aware that not found returns a null.  Other errors (4xx, 5xx) reject the promise
-         */
-        getJson(requestUrl, additionalHeaders = {}) {
-          return __awaiter(this, void 0, void 0, function* () {
-            additionalHeaders[Headers.Accept] = this._getExistingOrDefaultHeader(
-              additionalHeaders,
-              Headers.Accept,
-              MediaTypes.ApplicationJson
-            );
-            const res = yield this.get(requestUrl, additionalHeaders);
-            return this._processResponse(res, this.requestOptions);
-          });
-        }
-        postJson(requestUrl, obj, additionalHeaders = {}) {
-          return __awaiter(this, void 0, void 0, function* () {
-            const data = JSON.stringify(obj, null, 2);
-            additionalHeaders[Headers.Accept] = this._getExistingOrDefaultHeader(
-              additionalHeaders,
-              Headers.Accept,
-              MediaTypes.ApplicationJson
-            );
-            additionalHeaders[Headers.ContentType] = this._getExistingOrDefaultHeader(
-              additionalHeaders,
-              Headers.ContentType,
-              MediaTypes.ApplicationJson
-            );
-            const res = yield this.post(requestUrl, data, additionalHeaders);
-            return this._processResponse(res, this.requestOptions);
-          });
-        }
-        putJson(requestUrl, obj, additionalHeaders = {}) {
-          return __awaiter(this, void 0, void 0, function* () {
-            const data = JSON.stringify(obj, null, 2);
-            additionalHeaders[Headers.Accept] = this._getExistingOrDefaultHeader(
-              additionalHeaders,
-              Headers.Accept,
-              MediaTypes.ApplicationJson
-            );
-            additionalHeaders[Headers.ContentType] = this._getExistingOrDefaultHeader(
-              additionalHeaders,
-              Headers.ContentType,
-              MediaTypes.ApplicationJson
-            );
-            const res = yield this.put(requestUrl, data, additionalHeaders);
-            return this._processResponse(res, this.requestOptions);
-          });
-        }
-        patchJson(requestUrl, obj, additionalHeaders = {}) {
-          return __awaiter(this, void 0, void 0, function* () {
-            const data = JSON.stringify(obj, null, 2);
-            additionalHeaders[Headers.Accept] = this._getExistingOrDefaultHeader(
-              additionalHeaders,
-              Headers.Accept,
-              MediaTypes.ApplicationJson
-            );
-            additionalHeaders[Headers.ContentType] = this._getExistingOrDefaultHeader(
-              additionalHeaders,
-              Headers.ContentType,
-              MediaTypes.ApplicationJson
-            );
-            const res = yield this.patch(requestUrl, data, additionalHeaders);
-            return this._processResponse(res, this.requestOptions);
-          });
-        }
-        /**
-         * Makes a raw http request.
-         * All other methods such as get, post, patch, and request ultimately call this.
-         * Prefer get, del, post and patch
-         */
-        request(verb, requestUrl, data, headers) {
-          return __awaiter(this, void 0, void 0, function* () {
-            if (this._disposed) {
-              throw new Error('Client has already been disposed.');
-            }
-            const parsedUrl = new URL(requestUrl);
-            let info = this._prepareRequest(verb, parsedUrl, headers);
-            // Only perform retries on reads since writes may not be idempotent.
-            const maxTries =
-              this._allowRetries && RetryableHttpVerbs.includes(verb) ? this._maxRetries + 1 : 1;
-            let numTries = 0;
-            let response;
-            do {
-              response = yield this.requestRaw(info, data);
-              // Check if it's an authentication challenge
-              if (
-                response &&
-                response.message &&
-                response.message.statusCode === HttpCodes.Unauthorized
-              ) {
-                let authenticationHandler;
-                for (const handler of this.handlers) {
-                  if (handler.canHandleAuthentication(response)) {
-                    authenticationHandler = handler;
-                    break;
-                  }
-                }
-                if (authenticationHandler) {
-                  return authenticationHandler.handleAuthentication(this, info, data);
-                } else {
-                  // We have received an unauthorized response but have no handlers to handle it.
-                  // Let the response return to the caller.
-                  return response;
-                }
-              }
-              let redirectsRemaining = this._maxRedirects;
-              while (
-                response.message.statusCode &&
-                HttpRedirectCodes.includes(response.message.statusCode) &&
-                this._allowRedirects &&
-                redirectsRemaining > 0
-              ) {
-                const redirectUrl = response.message.headers['location'];
-                if (!redirectUrl) {
-                  // if there's no location to redirect to, we won't
-                  break;
-                }
-                const parsedRedirectUrl = new URL(redirectUrl);
-                if (
-                  parsedUrl.protocol === 'https:' &&
-                  parsedUrl.protocol !== parsedRedirectUrl.protocol &&
-                  !this._allowRedirectDowngrade
-                ) {
-                  throw new Error(
-                    'Redirect from HTTPS to HTTP protocol. This downgrade is not allowed for security reasons. If you want to allow this behavior, set the allowRedirectDowngrade option to true.'
-                  );
-                }
-                // we need to finish reading the response before reassigning response
-                // which will leak the open socket.
-                yield response.readBody();
-                // strip authorization header if redirected to a different hostname
-                if (parsedRedirectUrl.hostname !== parsedUrl.hostname) {
-                  for (const header in headers) {
-                    // header names are case insensitive
-                    if (header.toLowerCase() === 'authorization') {
-                      delete headers[header];
-                    }
-                  }
-                }
-                // let's make the request with the new redirectUrl
-                info = this._prepareRequest(verb, parsedRedirectUrl, headers);
-                response = yield this.requestRaw(info, data);
-                redirectsRemaining--;
-              }
-              if (
-                !response.message.statusCode ||
-                !HttpResponseRetryCodes.includes(response.message.statusCode)
-              ) {
-                // If not a retry code, return immediately instead of retrying
-                return response;
-              }
-              numTries += 1;
-              if (numTries < maxTries) {
-                yield response.readBody();
-                yield this._performExponentialBackoff(numTries);
-              }
-            } while (numTries < maxTries);
-            return response;
-          });
-        }
-        /**
-         * Needs to be called if keepAlive is set to true in request options.
-         */
-        dispose() {
-          if (this._agent) {
-            this._agent.destroy();
-          }
-          this._disposed = true;
-        }
-        /**
-         * Raw request.
-         * @param info
-         * @param data
-         */
-        requestRaw(info, data) {
-          return __awaiter(this, void 0, void 0, function* () {
-            return new Promise((resolve, reject) => {
-              function callbackForResult(err, res) {
-                if (err) {
-                  reject(err);
-                } else if (!res) {
-                  // If `err` is not passed, then `res` must be passed.
-                  reject(new Error('Unknown error'));
-                } else {
-                  resolve(res);
-                }
-              }
-              this.requestRawWithCallback(info, data, callbackForResult);
-            });
-          });
-        }
-        /**
-         * Raw request with callback.
-         * @param info
-         * @param data
-         * @param onResult
-         */
-        requestRawWithCallback(info, data, onResult) {
-          if (typeof data === 'string') {
-            if (!info.options.headers) {
-              info.options.headers = {};
-            }
-            info.options.headers['Content-Length'] = Buffer.byteLength(data, 'utf8');
-          }
-          let callbackCalled = false;
-          function handleResult(err, res) {
-            if (!callbackCalled) {
-              callbackCalled = true;
-              onResult(err, res);
-            }
-          }
-          const req = info.httpModule.request(info.options, msg => {
-            const res = new HttpClientResponse(msg);
-            handleResult(undefined, res);
-          });
-          let socket;
-          req.on('socket', sock => {
-            socket = sock;
-          });
-          // If we ever get disconnected, we want the socket to timeout eventually
-          req.setTimeout(this._socketTimeout || 3 * 60000, () => {
-            if (socket) {
-              socket.end();
-            }
-            handleResult(new Error(`Request timeout: ${info.options.path}`));
-          });
-          req.on('error', function (err) {
-            // err has statusCode property
-            // res should have headers
-            handleResult(err);
-          });
-          if (data && typeof data === 'string') {
-            req.write(data, 'utf8');
-          }
-          if (data && typeof data !== 'string') {
-            data.on('close', function () {
-              req.end();
-            });
-            data.pipe(req);
-          } else {
-            req.end();
-          }
-        }
-        /**
-         * Gets an http agent. This function is useful when you need an http agent that handles
-         * routing through a proxy server - depending upon the url and proxy environment variables.
-         * @param serverUrl  The server URL where the request will be sent. For example, https://api.github.com
-         */
-        getAgent(serverUrl) {
-          const parsedUrl = new URL(serverUrl);
-          return this._getAgent(parsedUrl);
-        }
-        _prepareRequest(method, requestUrl, headers) {
-          const info = {};
-          info.parsedUrl = requestUrl;
-          const usingSsl = info.parsedUrl.protocol === 'https:';
-          info.httpModule = usingSsl ? https : http;
-          const defaultPort = usingSsl ? 443 : 80;
-          info.options = {};
-          info.options.host = info.parsedUrl.hostname;
-          info.options.port = info.parsedUrl.port ? parseInt(info.parsedUrl.port) : defaultPort;
-          info.options.path = (info.parsedUrl.pathname || '') + (info.parsedUrl.search || '');
-          info.options.method = method;
-          info.options.headers = this._mergeHeaders(headers);
-          if (this.userAgent != null) {
-            info.options.headers['user-agent'] = this.userAgent;
-          }
-          info.options.agent = this._getAgent(info.parsedUrl);
-          // gives handlers an opportunity to participate
-          if (this.handlers) {
-            for (const handler of this.handlers) {
-              handler.prepareRequest(info.options);
-            }
-          }
-          return info;
-        }
-        _mergeHeaders(headers) {
-          if (this.requestOptions && this.requestOptions.headers) {
-            return Object.assign(
-              {},
-              lowercaseKeys(this.requestOptions.headers),
-              lowercaseKeys(headers || {})
-            );
-          }
-          return lowercaseKeys(headers || {});
-        }
-        _getExistingOrDefaultHeader(additionalHeaders, header, _default) {
-          let clientHeader;
-          if (this.requestOptions && this.requestOptions.headers) {
-            clientHeader = lowercaseKeys(this.requestOptions.headers)[header];
-          }
-          return additionalHeaders[header] || clientHeader || _default;
-        }
-        _getAgent(parsedUrl) {
-          let agent;
-          const proxyUrl = pm.getProxyUrl(parsedUrl);
-          const useProxy = proxyUrl && proxyUrl.hostname;
-          if (this._keepAlive && useProxy) {
-            agent = this._proxyAgent;
-          }
-          if (this._keepAlive && !useProxy) {
-            agent = this._agent;
-          }
-          // if agent is already assigned use that agent.
-          if (agent) {
-            return agent;
-          }
-          const usingSsl = parsedUrl.protocol === 'https:';
-          let maxSockets = 100;
-          if (this.requestOptions) {
-            maxSockets = this.requestOptions.maxSockets || http.globalAgent.maxSockets;
-          }
-          // This is `useProxy` again, but we need to check `proxyURl` directly for TypeScripts's flow analysis.
-          if (proxyUrl && proxyUrl.hostname) {
-            const agentOptions = {
-              maxSockets,
-              keepAlive: this._keepAlive,
-              proxy: Object.assign(
-                Object.assign(
-                  {},
-                  (proxyUrl.username || proxyUrl.password) && {
-                    proxyAuth: `${proxyUrl.username}:${proxyUrl.password}`
-                  }
-                ),
-                { host: proxyUrl.hostname, port: proxyUrl.port }
-              )
-            };
-            let tunnelAgent;
-            const overHttps = proxyUrl.protocol === 'https:';
-            if (usingSsl) {
-              tunnelAgent = overHttps ? tunnel.httpsOverHttps : tunnel.httpsOverHttp;
-            } else {
-              tunnelAgent = overHttps ? tunnel.httpOverHttps : tunnel.httpOverHttp;
-            }
-            agent = tunnelAgent(agentOptions);
-            this._proxyAgent = agent;
-          }
-          // if reusing agent across request and tunneling agent isn't assigned create a new agent
-          if (this._keepAlive && !agent) {
-            const options = { keepAlive: this._keepAlive, maxSockets };
-            agent = usingSsl ? new https.Agent(options) : new http.Agent(options);
-            this._agent = agent;
-          }
-          // if not using private agent and tunnel agent isn't setup then use global agent
-          if (!agent) {
-            agent = usingSsl ? https.globalAgent : http.globalAgent;
-          }
-          if (usingSsl && this._ignoreSslError) {
-            // we don't want to set NODE_TLS_REJECT_UNAUTHORIZED=0 since that will affect request for entire process
-            // http.RequestOptions doesn't expose a way to modify RequestOptions.agent.options
-            // we have to cast it to any and change it directly
-            agent.options = Object.assign(agent.options || {}, {
-              rejectUnauthorized: false
-            });
-          }
-          return agent;
-        }
-        _performExponentialBackoff(retryNumber) {
-          return __awaiter(this, void 0, void 0, function* () {
-            retryNumber = Math.min(ExponentialBackoffCeiling, retryNumber);
-            const ms = ExponentialBackoffTimeSlice * Math.pow(2, retryNumber);
-            return new Promise(resolve => setTimeout(() => resolve(), ms));
-          });
-        }
-        _processResponse(res, options) {
-          return __awaiter(this, void 0, void 0, function* () {
-            return new Promise((resolve, reject) =>
-              __awaiter(this, void 0, void 0, function* () {
-                const statusCode = res.message.statusCode || 0;
-                const response = {
-                  statusCode,
-                  result: null,
-                  headers: {}
-                };
-                // not found leads to null obj returned
-                if (statusCode === HttpCodes.NotFound) {
-                  resolve(response);
-                }
-                // get the result from the body
-                function dateTimeDeserializer(key, value) {
-                  if (typeof value === 'string') {
-                    const a = new Date(value);
-                    if (!isNaN(a.valueOf())) {
-                      return a;
-                    }
-                  }
-                  return value;
-                }
-                let obj;
-                let contents;
-                try {
-                  contents = yield res.readBody();
-                  if (contents && contents.length > 0) {
-                    if (options && options.deserializeDates) {
-                      obj = JSON.parse(contents, dateTimeDeserializer);
-                    } else {
-                      obj = JSON.parse(contents);
-                    }
-                    response.result = obj;
-                  }
-                  response.headers = res.message.headers;
-                } catch (err) {
-                  // Invalid resource (contents not json);  leaving result obj null
-                }
-                // note that 3xx redirects are handled by the http layer.
-                if (statusCode > 299) {
-                  let msg;
-                  // if exception/error in body, attempt to get better error
-                  if (obj && obj.message) {
-                    msg = obj.message;
-                  } else if (contents && contents.length > 0) {
-                    // it may be the case that the exception is in the body message as string
-                    msg = contents;
-                  } else {
-                    msg = `Failed request: (${statusCode})`;
-                  }
-                  const err = new HttpClientError(msg, statusCode);
-                  err.result = response.result;
-                  reject(err);
-                } else {
-                  resolve(response);
-                }
-              })
-            );
-          });
-        }
-      }
-      exports.HttpClient = HttpClient;
-      const lowercaseKeys = obj =>
-        Object.keys(obj).reduce((c, k) => ((c[k.toLowerCase()] = obj[k]), c), {});
-      //# sourceMappingURL=index.js.map
-
-      /***/
-    },
-
-    /***/ 2843: /***/ (__unused_webpack_module, exports) => {
-      'use strict';
-
-      Object.defineProperty(exports, '__esModule', { value: true });
-      exports.checkBypass = exports.getProxyUrl = void 0;
-      function getProxyUrl(reqUrl) {
-        const usingSsl = reqUrl.protocol === 'https:';
-        if (checkBypass(reqUrl)) {
-          return undefined;
-        }
-        const proxyVar = (() => {
-          if (usingSsl) {
-            return process.env['https_proxy'] || process.env['HTTPS_PROXY'];
-          } else {
-            return process.env['http_proxy'] || process.env['HTTP_PROXY'];
-          }
-        })();
-        if (proxyVar) {
-          return new URL(proxyVar);
-        } else {
-          return undefined;
-        }
-      }
-      exports.getProxyUrl = getProxyUrl;
-      function checkBypass(reqUrl) {
-        if (!reqUrl.hostname) {
-          return false;
-        }
-        const noProxy = process.env['no_proxy'] || process.env['NO_PROXY'] || '';
-        if (!noProxy) {
-          return false;
-        }
-        // Determine the request port
-        let reqPort;
-        if (reqUrl.port) {
-          reqPort = Number(reqUrl.port);
-        } else if (reqUrl.protocol === 'http:') {
-          reqPort = 80;
-        } else if (reqUrl.protocol === 'https:') {
-          reqPort = 443;
-        }
-        // Format the request hostname and hostname with port
-        const upperReqHosts = [reqUrl.hostname.toUpperCase()];
-        if (typeof reqPort === 'number') {
-          upperReqHosts.push(`${upperReqHosts[0]}:${reqPort}`);
-        }
-        // Compare request host against noproxy
-        for (const upperNoProxyItem of noProxy
-          .split(',')
-          .map(x => x.trim().toUpperCase())
-          .filter(x => x)) {
-          if (upperReqHosts.some(x => x === upperNoProxyItem)) {
-            return true;
-          }
-        }
-        return false;
-      }
-      exports.checkBypass = checkBypass;
-      //# sourceMappingURL=proxy.js.map
 
       /***/
     },
@@ -2748,6 +4075,43 @@
     /***/ 1514: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
       'use strict';
 
+      var __createBinding =
+        (this && this.__createBinding) ||
+        (Object.create
+          ? function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              Object.defineProperty(o, k2, {
+                enumerable: true,
+                get: function () {
+                  return m[k];
+                }
+              });
+            }
+          : function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              o[k2] = m[k];
+            });
+      var __setModuleDefault =
+        (this && this.__setModuleDefault) ||
+        (Object.create
+          ? function (o, v) {
+              Object.defineProperty(o, 'default', { enumerable: true, value: v });
+            }
+          : function (o, v) {
+              o['default'] = v;
+            });
+      var __importStar =
+        (this && this.__importStar) ||
+        function (mod) {
+          if (mod && mod.__esModule) return mod;
+          var result = {};
+          if (mod != null)
+            for (var k in mod)
+              if (k !== 'default' && Object.hasOwnProperty.call(mod, k))
+                __createBinding(result, mod, k);
+          __setModuleDefault(result, mod);
+          return result;
+        };
       var __awaiter =
         (this && this.__awaiter) ||
         function (thisArg, _arguments, P, generator) {
@@ -2779,17 +4143,9 @@
             step((generator = generator.apply(thisArg, _arguments || [])).next());
           });
         };
-      var __importStar =
-        (this && this.__importStar) ||
-        function (mod) {
-          if (mod && mod.__esModule) return mod;
-          var result = {};
-          if (mod != null)
-            for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
-          result['default'] = mod;
-          return result;
-        };
       Object.defineProperty(exports, '__esModule', { value: true });
+      exports.getExecOutput = exports.exec = void 0;
+      const string_decoder_1 = __nccwpck_require__(4304);
       const tr = __importStar(__nccwpck_require__(8159));
       /**
        * Exec a command.
@@ -2815,6 +4171,66 @@
         });
       }
       exports.exec = exec;
+      /**
+       * Exec a command and get the output.
+       * Output will be streamed to the live console.
+       * Returns promise with the exit code and collected stdout and stderr
+       *
+       * @param     commandLine           command to execute (can include additional args). Must be correctly escaped.
+       * @param     args                  optional arguments for tool. Escaping is handled by the lib.
+       * @param     options               optional exec options.  See ExecOptions
+       * @returns   Promise<ExecOutput>   exit code, stdout, and stderr
+       */
+      function getExecOutput(commandLine, args, options) {
+        var _a, _b;
+        return __awaiter(this, void 0, void 0, function* () {
+          let stdout = '';
+          let stderr = '';
+          //Using string decoder covers the case where a mult-byte character is split
+          const stdoutDecoder = new string_decoder_1.StringDecoder('utf8');
+          const stderrDecoder = new string_decoder_1.StringDecoder('utf8');
+          const originalStdoutListener =
+            (_a = options === null || options === void 0 ? void 0 : options.listeners) === null ||
+            _a === void 0
+              ? void 0
+              : _a.stdout;
+          const originalStdErrListener =
+            (_b = options === null || options === void 0 ? void 0 : options.listeners) === null ||
+            _b === void 0
+              ? void 0
+              : _b.stderr;
+          const stdErrListener = data => {
+            stderr += stderrDecoder.write(data);
+            if (originalStdErrListener) {
+              originalStdErrListener(data);
+            }
+          };
+          const stdOutListener = data => {
+            stdout += stdoutDecoder.write(data);
+            if (originalStdoutListener) {
+              originalStdoutListener(data);
+            }
+          };
+          const listeners = Object.assign(
+            Object.assign({}, options === null || options === void 0 ? void 0 : options.listeners),
+            { stdout: stdOutListener, stderr: stdErrListener }
+          );
+          const exitCode = yield exec(
+            commandLine,
+            args,
+            Object.assign(Object.assign({}, options), { listeners })
+          );
+          //flush any remaining characters
+          stdout += stdoutDecoder.end();
+          stderr += stderrDecoder.end();
+          return {
+            exitCode,
+            stdout,
+            stderr
+          };
+        });
+      }
+      exports.getExecOutput = getExecOutput;
       //# sourceMappingURL=exec.js.map
 
       /***/
@@ -2823,6 +4239,43 @@
     /***/ 8159: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
       'use strict';
 
+      var __createBinding =
+        (this && this.__createBinding) ||
+        (Object.create
+          ? function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              Object.defineProperty(o, k2, {
+                enumerable: true,
+                get: function () {
+                  return m[k];
+                }
+              });
+            }
+          : function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              o[k2] = m[k];
+            });
+      var __setModuleDefault =
+        (this && this.__setModuleDefault) ||
+        (Object.create
+          ? function (o, v) {
+              Object.defineProperty(o, 'default', { enumerable: true, value: v });
+            }
+          : function (o, v) {
+              o['default'] = v;
+            });
+      var __importStar =
+        (this && this.__importStar) ||
+        function (mod) {
+          if (mod && mod.__esModule) return mod;
+          var result = {};
+          if (mod != null)
+            for (var k in mod)
+              if (k !== 'default' && Object.hasOwnProperty.call(mod, k))
+                __createBinding(result, mod, k);
+          __setModuleDefault(result, mod);
+          return result;
+        };
       var __awaiter =
         (this && this.__awaiter) ||
         function (thisArg, _arguments, P, generator) {
@@ -2854,23 +4307,15 @@
             step((generator = generator.apply(thisArg, _arguments || [])).next());
           });
         };
-      var __importStar =
-        (this && this.__importStar) ||
-        function (mod) {
-          if (mod && mod.__esModule) return mod;
-          var result = {};
-          if (mod != null)
-            for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
-          result['default'] = mod;
-          return result;
-        };
       Object.defineProperty(exports, '__esModule', { value: true });
+      exports.argStringToArray = exports.ToolRunner = void 0;
       const os = __importStar(__nccwpck_require__(2087));
       const events = __importStar(__nccwpck_require__(8614));
       const child = __importStar(__nccwpck_require__(3129));
       const path = __importStar(__nccwpck_require__(5622));
       const io = __importStar(__nccwpck_require__(7436));
       const ioUtil = __importStar(__nccwpck_require__(1962));
+      const timers_1 = __nccwpck_require__(8213);
       /* eslint-disable @typescript-eslint/unbound-method */
       const IS_WINDOWS = process.platform === 'win32';
       /*
@@ -2939,10 +4384,11 @@
               s = s.substring(n + os.EOL.length);
               n = s.indexOf(os.EOL);
             }
-            strBuffer = s;
+            return s;
           } catch (err) {
             // streaming lines to console is best effort.  Don't fail a build.
             this._debug(`error processing line. Failed with error ${err}`);
+            return '';
           }
         }
         _getSpawnFileName() {
@@ -3216,106 +4662,111 @@
             // if the tool is only a file name, then resolve it from the PATH
             // otherwise verify it exists (add extension on Windows if necessary)
             this.toolPath = yield io.which(this.toolPath, true);
-            return new Promise((resolve, reject) => {
-              this._debug(`exec tool: ${this.toolPath}`);
-              this._debug('arguments:');
-              for (const arg of this.args) {
-                this._debug(`   ${arg}`);
-              }
-              const optionsNonNull = this._cloneExecOptions(this.options);
-              if (!optionsNonNull.silent && optionsNonNull.outStream) {
-                optionsNonNull.outStream.write(this._getCommandString(optionsNonNull) + os.EOL);
-              }
-              const state = new ExecState(optionsNonNull, this.toolPath);
-              state.on('debug', message => {
-                this._debug(message);
-              });
-              const fileName = this._getSpawnFileName();
-              const cp = child.spawn(
-                fileName,
-                this._getSpawnArgs(optionsNonNull),
-                this._getSpawnOptions(this.options, fileName)
-              );
-              const stdbuffer = '';
-              if (cp.stdout) {
-                cp.stdout.on('data', data => {
-                  if (this.options.listeners && this.options.listeners.stdout) {
-                    this.options.listeners.stdout(data);
-                  }
-                  if (!optionsNonNull.silent && optionsNonNull.outStream) {
-                    optionsNonNull.outStream.write(data);
-                  }
-                  this._processLineBuffer(data, stdbuffer, line => {
-                    if (this.options.listeners && this.options.listeners.stdline) {
-                      this.options.listeners.stdline(line);
-                    }
-                  });
+            return new Promise((resolve, reject) =>
+              __awaiter(this, void 0, void 0, function* () {
+                this._debug(`exec tool: ${this.toolPath}`);
+                this._debug('arguments:');
+                for (const arg of this.args) {
+                  this._debug(`   ${arg}`);
+                }
+                const optionsNonNull = this._cloneExecOptions(this.options);
+                if (!optionsNonNull.silent && optionsNonNull.outStream) {
+                  optionsNonNull.outStream.write(this._getCommandString(optionsNonNull) + os.EOL);
+                }
+                const state = new ExecState(optionsNonNull, this.toolPath);
+                state.on('debug', message => {
+                  this._debug(message);
                 });
-              }
-              const errbuffer = '';
-              if (cp.stderr) {
-                cp.stderr.on('data', data => {
-                  state.processStderr = true;
-                  if (this.options.listeners && this.options.listeners.stderr) {
-                    this.options.listeners.stderr(data);
-                  }
-                  if (
-                    !optionsNonNull.silent &&
-                    optionsNonNull.errStream &&
-                    optionsNonNull.outStream
-                  ) {
-                    const s = optionsNonNull.failOnStdErr
-                      ? optionsNonNull.errStream
-                      : optionsNonNull.outStream;
-                    s.write(data);
-                  }
-                  this._processLineBuffer(data, errbuffer, line => {
-                    if (this.options.listeners && this.options.listeners.errline) {
-                      this.options.listeners.errline(line);
+                if (this.options.cwd && !(yield ioUtil.exists(this.options.cwd))) {
+                  return reject(new Error(`The cwd: ${this.options.cwd} does not exist!`));
+                }
+                const fileName = this._getSpawnFileName();
+                const cp = child.spawn(
+                  fileName,
+                  this._getSpawnArgs(optionsNonNull),
+                  this._getSpawnOptions(this.options, fileName)
+                );
+                let stdbuffer = '';
+                if (cp.stdout) {
+                  cp.stdout.on('data', data => {
+                    if (this.options.listeners && this.options.listeners.stdout) {
+                      this.options.listeners.stdout(data);
                     }
+                    if (!optionsNonNull.silent && optionsNonNull.outStream) {
+                      optionsNonNull.outStream.write(data);
+                    }
+                    stdbuffer = this._processLineBuffer(data, stdbuffer, line => {
+                      if (this.options.listeners && this.options.listeners.stdline) {
+                        this.options.listeners.stdline(line);
+                      }
+                    });
                   });
+                }
+                let errbuffer = '';
+                if (cp.stderr) {
+                  cp.stderr.on('data', data => {
+                    state.processStderr = true;
+                    if (this.options.listeners && this.options.listeners.stderr) {
+                      this.options.listeners.stderr(data);
+                    }
+                    if (
+                      !optionsNonNull.silent &&
+                      optionsNonNull.errStream &&
+                      optionsNonNull.outStream
+                    ) {
+                      const s = optionsNonNull.failOnStdErr
+                        ? optionsNonNull.errStream
+                        : optionsNonNull.outStream;
+                      s.write(data);
+                    }
+                    errbuffer = this._processLineBuffer(data, errbuffer, line => {
+                      if (this.options.listeners && this.options.listeners.errline) {
+                        this.options.listeners.errline(line);
+                      }
+                    });
+                  });
+                }
+                cp.on('error', err => {
+                  state.processError = err.message;
+                  state.processExited = true;
+                  state.processClosed = true;
+                  state.CheckComplete();
                 });
-              }
-              cp.on('error', err => {
-                state.processError = err.message;
-                state.processExited = true;
-                state.processClosed = true;
-                state.CheckComplete();
-              });
-              cp.on('exit', code => {
-                state.processExitCode = code;
-                state.processExited = true;
-                this._debug(`Exit code ${code} received from tool '${this.toolPath}'`);
-                state.CheckComplete();
-              });
-              cp.on('close', code => {
-                state.processExitCode = code;
-                state.processExited = true;
-                state.processClosed = true;
-                this._debug(`STDIO streams have closed for tool '${this.toolPath}'`);
-                state.CheckComplete();
-              });
-              state.on('done', (error, exitCode) => {
-                if (stdbuffer.length > 0) {
-                  this.emit('stdline', stdbuffer);
+                cp.on('exit', code => {
+                  state.processExitCode = code;
+                  state.processExited = true;
+                  this._debug(`Exit code ${code} received from tool '${this.toolPath}'`);
+                  state.CheckComplete();
+                });
+                cp.on('close', code => {
+                  state.processExitCode = code;
+                  state.processExited = true;
+                  state.processClosed = true;
+                  this._debug(`STDIO streams have closed for tool '${this.toolPath}'`);
+                  state.CheckComplete();
+                });
+                state.on('done', (error, exitCode) => {
+                  if (stdbuffer.length > 0) {
+                    this.emit('stdline', stdbuffer);
+                  }
+                  if (errbuffer.length > 0) {
+                    this.emit('errline', errbuffer);
+                  }
+                  cp.removeAllListeners();
+                  if (error) {
+                    reject(error);
+                  } else {
+                    resolve(exitCode);
+                  }
+                });
+                if (this.options.input) {
+                  if (!cp.stdin) {
+                    throw new Error('child process missing stdin');
+                  }
+                  cp.stdin.end(this.options.input);
                 }
-                if (errbuffer.length > 0) {
-                  this.emit('errline', errbuffer);
-                }
-                cp.removeAllListeners();
-                if (error) {
-                  reject(error);
-                } else {
-                  resolve(exitCode);
-                }
-              });
-              if (this.options.input) {
-                if (!cp.stdin) {
-                  throw new Error('child process missing stdin');
-                }
-                cp.stdin.end(this.options.input);
-              }
-            });
+              })
+            );
           });
         }
       }
@@ -3399,7 +4850,7 @@
           if (this.processClosed) {
             this._setResult();
           } else if (this.processExited) {
-            this.timeout = setTimeout(ExecState.HandleTimeout, this.delay, this);
+            this.timeout = timers_1.setTimeout(ExecState.HandleTimeout, this.delay, this);
           }
         }
         _debug(message) {
@@ -4599,25 +6050,66 @@
       /***/
     },
 
-    /***/ 3702: /***/ (__unused_webpack_module, exports) => {
+    /***/ 5526: /***/ function (__unused_webpack_module, exports) {
       'use strict';
 
+      var __awaiter =
+        (this && this.__awaiter) ||
+        function (thisArg, _arguments, P, generator) {
+          function adopt(value) {
+            return value instanceof P
+              ? value
+              : new P(function (resolve) {
+                  resolve(value);
+                });
+          }
+          return new (P || (P = Promise))(function (resolve, reject) {
+            function fulfilled(value) {
+              try {
+                step(generator.next(value));
+              } catch (e) {
+                reject(e);
+              }
+            }
+            function rejected(value) {
+              try {
+                step(generator['throw'](value));
+              } catch (e) {
+                reject(e);
+              }
+            }
+            function step(result) {
+              result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+            }
+            step((generator = generator.apply(thisArg, _arguments || [])).next());
+          });
+        };
       Object.defineProperty(exports, '__esModule', { value: true });
+      exports.PersonalAccessTokenCredentialHandler =
+        exports.BearerCredentialHandler =
+        exports.BasicCredentialHandler =
+          void 0;
       class BasicCredentialHandler {
         constructor(username, password) {
           this.username = username;
           this.password = password;
         }
         prepareRequest(options) {
-          options.headers['Authorization'] =
-            'Basic ' + Buffer.from(this.username + ':' + this.password).toString('base64');
+          if (!options.headers) {
+            throw Error('The request has no headers');
+          }
+          options.headers['Authorization'] = `Basic ${Buffer.from(
+            `${this.username}:${this.password}`
+          ).toString('base64')}`;
         }
         // This handler cannot handle 401
-        canHandleAuthentication(response) {
+        canHandleAuthentication() {
           return false;
         }
-        handleAuthentication(httpClient, requestInfo, objs) {
-          return null;
+        handleAuthentication() {
+          return __awaiter(this, void 0, void 0, function* () {
+            throw new Error('not implemented');
+          });
         }
       }
       exports.BasicCredentialHandler = BasicCredentialHandler;
@@ -4628,14 +6120,19 @@
         // currently implements pre-authorization
         // TODO: support preAuth = false where it hooks on 401
         prepareRequest(options) {
-          options.headers['Authorization'] = 'Bearer ' + this.token;
+          if (!options.headers) {
+            throw Error('The request has no headers');
+          }
+          options.headers['Authorization'] = `Bearer ${this.token}`;
         }
         // This handler cannot handle 401
-        canHandleAuthentication(response) {
+        canHandleAuthentication() {
           return false;
         }
-        handleAuthentication(httpClient, requestInfo, objs) {
-          return null;
+        handleAuthentication() {
+          return __awaiter(this, void 0, void 0, function* () {
+            throw new Error('not implemented');
+          });
         }
       }
       exports.BearerCredentialHandler = BearerCredentialHandler;
@@ -4646,30 +6143,115 @@
         // currently implements pre-authorization
         // TODO: support preAuth = false where it hooks on 401
         prepareRequest(options) {
-          options.headers['Authorization'] =
-            'Basic ' + Buffer.from('PAT:' + this.token).toString('base64');
+          if (!options.headers) {
+            throw Error('The request has no headers');
+          }
+          options.headers['Authorization'] = `Basic ${Buffer.from(`PAT:${this.token}`).toString(
+            'base64'
+          )}`;
         }
         // This handler cannot handle 401
-        canHandleAuthentication(response) {
+        canHandleAuthentication() {
           return false;
         }
-        handleAuthentication(httpClient, requestInfo, objs) {
-          return null;
+        handleAuthentication() {
+          return __awaiter(this, void 0, void 0, function* () {
+            throw new Error('not implemented');
+          });
         }
       }
       exports.PersonalAccessTokenCredentialHandler = PersonalAccessTokenCredentialHandler;
+      //# sourceMappingURL=auth.js.map
 
       /***/
     },
 
-    /***/ 9925: /***/ (__unused_webpack_module, exports, __nccwpck_require__) => {
+    /***/ 6255: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
       'use strict';
 
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      var __createBinding =
+        (this && this.__createBinding) ||
+        (Object.create
+          ? function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              Object.defineProperty(o, k2, {
+                enumerable: true,
+                get: function () {
+                  return m[k];
+                }
+              });
+            }
+          : function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              o[k2] = m[k];
+            });
+      var __setModuleDefault =
+        (this && this.__setModuleDefault) ||
+        (Object.create
+          ? function (o, v) {
+              Object.defineProperty(o, 'default', { enumerable: true, value: v });
+            }
+          : function (o, v) {
+              o['default'] = v;
+            });
+      var __importStar =
+        (this && this.__importStar) ||
+        function (mod) {
+          if (mod && mod.__esModule) return mod;
+          var result = {};
+          if (mod != null)
+            for (var k in mod)
+              if (k !== 'default' && Object.hasOwnProperty.call(mod, k))
+                __createBinding(result, mod, k);
+          __setModuleDefault(result, mod);
+          return result;
+        };
+      var __awaiter =
+        (this && this.__awaiter) ||
+        function (thisArg, _arguments, P, generator) {
+          function adopt(value) {
+            return value instanceof P
+              ? value
+              : new P(function (resolve) {
+                  resolve(value);
+                });
+          }
+          return new (P || (P = Promise))(function (resolve, reject) {
+            function fulfilled(value) {
+              try {
+                step(generator.next(value));
+              } catch (e) {
+                reject(e);
+              }
+            }
+            function rejected(value) {
+              try {
+                step(generator['throw'](value));
+              } catch (e) {
+                reject(e);
+              }
+            }
+            function step(result) {
+              result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+            }
+            step((generator = generator.apply(thisArg, _arguments || [])).next());
+          });
+        };
       Object.defineProperty(exports, '__esModule', { value: true });
-      const http = __nccwpck_require__(8605);
-      const https = __nccwpck_require__(7211);
-      const pm = __nccwpck_require__(6443);
-      let tunnel;
+      exports.HttpClient =
+        exports.isHttps =
+        exports.HttpClientResponse =
+        exports.HttpClientError =
+        exports.getProxyUrl =
+        exports.MediaTypes =
+        exports.Headers =
+        exports.HttpCodes =
+          void 0;
+      const http = __importStar(__nccwpck_require__(8605));
+      const https = __importStar(__nccwpck_require__(7211));
+      const pm = __importStar(__nccwpck_require__(9835));
+      const tunnel = __importStar(__nccwpck_require__(4294));
       var HttpCodes;
       (function (HttpCodes) {
         HttpCodes[(HttpCodes['OK'] = 200)] = 'OK';
@@ -4714,7 +6296,7 @@
        * @param serverUrl  The server URL where the request will be sent. For example, https://api.github.com
        */
       function getProxyUrl(serverUrl) {
-        let proxyUrl = pm.getProxyUrl(new URL(serverUrl));
+        const proxyUrl = pm.getProxyUrl(new URL(serverUrl));
         return proxyUrl ? proxyUrl.href : '';
       }
       exports.getProxyUrl = getProxyUrl;
@@ -4747,20 +6329,39 @@
           this.message = message;
         }
         readBody() {
-          return new Promise(async (resolve, reject) => {
-            let output = Buffer.alloc(0);
-            this.message.on('data', chunk => {
-              output = Buffer.concat([output, chunk]);
-            });
-            this.message.on('end', () => {
-              resolve(output.toString());
-            });
+          return __awaiter(this, void 0, void 0, function* () {
+            return new Promise(resolve =>
+              __awaiter(this, void 0, void 0, function* () {
+                let output = Buffer.alloc(0);
+                this.message.on('data', chunk => {
+                  output = Buffer.concat([output, chunk]);
+                });
+                this.message.on('end', () => {
+                  resolve(output.toString());
+                });
+              })
+            );
+          });
+        }
+        readBodyBuffer() {
+          return __awaiter(this, void 0, void 0, function* () {
+            return new Promise(resolve =>
+              __awaiter(this, void 0, void 0, function* () {
+                const chunks = [];
+                this.message.on('data', chunk => {
+                  chunks.push(chunk);
+                });
+                this.message.on('end', () => {
+                  resolve(Buffer.concat(chunks));
+                });
+              })
+            );
           });
         }
       }
       exports.HttpClientResponse = HttpClientResponse;
       function isHttps(requestUrl) {
-        let parsedUrl = new URL(requestUrl);
+        const parsedUrl = new URL(requestUrl);
         return parsedUrl.protocol === 'https:';
       }
       exports.isHttps = isHttps;
@@ -4803,175 +6404,205 @@
           }
         }
         options(requestUrl, additionalHeaders) {
-          return this.request('OPTIONS', requestUrl, null, additionalHeaders || {});
+          return __awaiter(this, void 0, void 0, function* () {
+            return this.request('OPTIONS', requestUrl, null, additionalHeaders || {});
+          });
         }
         get(requestUrl, additionalHeaders) {
-          return this.request('GET', requestUrl, null, additionalHeaders || {});
+          return __awaiter(this, void 0, void 0, function* () {
+            return this.request('GET', requestUrl, null, additionalHeaders || {});
+          });
         }
         del(requestUrl, additionalHeaders) {
-          return this.request('DELETE', requestUrl, null, additionalHeaders || {});
+          return __awaiter(this, void 0, void 0, function* () {
+            return this.request('DELETE', requestUrl, null, additionalHeaders || {});
+          });
         }
         post(requestUrl, data, additionalHeaders) {
-          return this.request('POST', requestUrl, data, additionalHeaders || {});
+          return __awaiter(this, void 0, void 0, function* () {
+            return this.request('POST', requestUrl, data, additionalHeaders || {});
+          });
         }
         patch(requestUrl, data, additionalHeaders) {
-          return this.request('PATCH', requestUrl, data, additionalHeaders || {});
+          return __awaiter(this, void 0, void 0, function* () {
+            return this.request('PATCH', requestUrl, data, additionalHeaders || {});
+          });
         }
         put(requestUrl, data, additionalHeaders) {
-          return this.request('PUT', requestUrl, data, additionalHeaders || {});
+          return __awaiter(this, void 0, void 0, function* () {
+            return this.request('PUT', requestUrl, data, additionalHeaders || {});
+          });
         }
         head(requestUrl, additionalHeaders) {
-          return this.request('HEAD', requestUrl, null, additionalHeaders || {});
+          return __awaiter(this, void 0, void 0, function* () {
+            return this.request('HEAD', requestUrl, null, additionalHeaders || {});
+          });
         }
         sendStream(verb, requestUrl, stream, additionalHeaders) {
-          return this.request(verb, requestUrl, stream, additionalHeaders);
+          return __awaiter(this, void 0, void 0, function* () {
+            return this.request(verb, requestUrl, stream, additionalHeaders);
+          });
         }
         /**
          * Gets a typed object from an endpoint
          * Be aware that not found returns a null.  Other errors (4xx, 5xx) reject the promise
          */
-        async getJson(requestUrl, additionalHeaders = {}) {
-          additionalHeaders[Headers.Accept] = this._getExistingOrDefaultHeader(
-            additionalHeaders,
-            Headers.Accept,
-            MediaTypes.ApplicationJson
-          );
-          let res = await this.get(requestUrl, additionalHeaders);
-          return this._processResponse(res, this.requestOptions);
+        getJson(requestUrl, additionalHeaders = {}) {
+          return __awaiter(this, void 0, void 0, function* () {
+            additionalHeaders[Headers.Accept] = this._getExistingOrDefaultHeader(
+              additionalHeaders,
+              Headers.Accept,
+              MediaTypes.ApplicationJson
+            );
+            const res = yield this.get(requestUrl, additionalHeaders);
+            return this._processResponse(res, this.requestOptions);
+          });
         }
-        async postJson(requestUrl, obj, additionalHeaders = {}) {
-          let data = JSON.stringify(obj, null, 2);
-          additionalHeaders[Headers.Accept] = this._getExistingOrDefaultHeader(
-            additionalHeaders,
-            Headers.Accept,
-            MediaTypes.ApplicationJson
-          );
-          additionalHeaders[Headers.ContentType] = this._getExistingOrDefaultHeader(
-            additionalHeaders,
-            Headers.ContentType,
-            MediaTypes.ApplicationJson
-          );
-          let res = await this.post(requestUrl, data, additionalHeaders);
-          return this._processResponse(res, this.requestOptions);
+        postJson(requestUrl, obj, additionalHeaders = {}) {
+          return __awaiter(this, void 0, void 0, function* () {
+            const data = JSON.stringify(obj, null, 2);
+            additionalHeaders[Headers.Accept] = this._getExistingOrDefaultHeader(
+              additionalHeaders,
+              Headers.Accept,
+              MediaTypes.ApplicationJson
+            );
+            additionalHeaders[Headers.ContentType] = this._getExistingOrDefaultHeader(
+              additionalHeaders,
+              Headers.ContentType,
+              MediaTypes.ApplicationJson
+            );
+            const res = yield this.post(requestUrl, data, additionalHeaders);
+            return this._processResponse(res, this.requestOptions);
+          });
         }
-        async putJson(requestUrl, obj, additionalHeaders = {}) {
-          let data = JSON.stringify(obj, null, 2);
-          additionalHeaders[Headers.Accept] = this._getExistingOrDefaultHeader(
-            additionalHeaders,
-            Headers.Accept,
-            MediaTypes.ApplicationJson
-          );
-          additionalHeaders[Headers.ContentType] = this._getExistingOrDefaultHeader(
-            additionalHeaders,
-            Headers.ContentType,
-            MediaTypes.ApplicationJson
-          );
-          let res = await this.put(requestUrl, data, additionalHeaders);
-          return this._processResponse(res, this.requestOptions);
+        putJson(requestUrl, obj, additionalHeaders = {}) {
+          return __awaiter(this, void 0, void 0, function* () {
+            const data = JSON.stringify(obj, null, 2);
+            additionalHeaders[Headers.Accept] = this._getExistingOrDefaultHeader(
+              additionalHeaders,
+              Headers.Accept,
+              MediaTypes.ApplicationJson
+            );
+            additionalHeaders[Headers.ContentType] = this._getExistingOrDefaultHeader(
+              additionalHeaders,
+              Headers.ContentType,
+              MediaTypes.ApplicationJson
+            );
+            const res = yield this.put(requestUrl, data, additionalHeaders);
+            return this._processResponse(res, this.requestOptions);
+          });
         }
-        async patchJson(requestUrl, obj, additionalHeaders = {}) {
-          let data = JSON.stringify(obj, null, 2);
-          additionalHeaders[Headers.Accept] = this._getExistingOrDefaultHeader(
-            additionalHeaders,
-            Headers.Accept,
-            MediaTypes.ApplicationJson
-          );
-          additionalHeaders[Headers.ContentType] = this._getExistingOrDefaultHeader(
-            additionalHeaders,
-            Headers.ContentType,
-            MediaTypes.ApplicationJson
-          );
-          let res = await this.patch(requestUrl, data, additionalHeaders);
-          return this._processResponse(res, this.requestOptions);
+        patchJson(requestUrl, obj, additionalHeaders = {}) {
+          return __awaiter(this, void 0, void 0, function* () {
+            const data = JSON.stringify(obj, null, 2);
+            additionalHeaders[Headers.Accept] = this._getExistingOrDefaultHeader(
+              additionalHeaders,
+              Headers.Accept,
+              MediaTypes.ApplicationJson
+            );
+            additionalHeaders[Headers.ContentType] = this._getExistingOrDefaultHeader(
+              additionalHeaders,
+              Headers.ContentType,
+              MediaTypes.ApplicationJson
+            );
+            const res = yield this.patch(requestUrl, data, additionalHeaders);
+            return this._processResponse(res, this.requestOptions);
+          });
         }
         /**
          * Makes a raw http request.
          * All other methods such as get, post, patch, and request ultimately call this.
          * Prefer get, del, post and patch
          */
-        async request(verb, requestUrl, data, headers) {
-          if (this._disposed) {
-            throw new Error('Client has already been disposed.');
-          }
-          let parsedUrl = new URL(requestUrl);
-          let info = this._prepareRequest(verb, parsedUrl, headers);
-          // Only perform retries on reads since writes may not be idempotent.
-          let maxTries =
-            this._allowRetries && RetryableHttpVerbs.indexOf(verb) != -1 ? this._maxRetries + 1 : 1;
-          let numTries = 0;
-          let response;
-          while (numTries < maxTries) {
-            response = await this.requestRaw(info, data);
-            // Check if it's an authentication challenge
-            if (
-              response &&
-              response.message &&
-              response.message.statusCode === HttpCodes.Unauthorized
-            ) {
-              let authenticationHandler;
-              for (let i = 0; i < this.handlers.length; i++) {
-                if (this.handlers[i].canHandleAuthentication(response)) {
-                  authenticationHandler = this.handlers[i];
-                  break;
-                }
-              }
-              if (authenticationHandler) {
-                return authenticationHandler.handleAuthentication(this, info, data);
-              } else {
-                // We have received an unauthorized response but have no handlers to handle it.
-                // Let the response return to the caller.
-                return response;
-              }
+        request(verb, requestUrl, data, headers) {
+          return __awaiter(this, void 0, void 0, function* () {
+            if (this._disposed) {
+              throw new Error('Client has already been disposed.');
             }
-            let redirectsRemaining = this._maxRedirects;
-            while (
-              HttpRedirectCodes.indexOf(response.message.statusCode) != -1 &&
-              this._allowRedirects &&
-              redirectsRemaining > 0
-            ) {
-              const redirectUrl = response.message.headers['location'];
-              if (!redirectUrl) {
-                // if there's no location to redirect to, we won't
-                break;
-              }
-              let parsedRedirectUrl = new URL(redirectUrl);
+            const parsedUrl = new URL(requestUrl);
+            let info = this._prepareRequest(verb, parsedUrl, headers);
+            // Only perform retries on reads since writes may not be idempotent.
+            const maxTries =
+              this._allowRetries && RetryableHttpVerbs.includes(verb) ? this._maxRetries + 1 : 1;
+            let numTries = 0;
+            let response;
+            do {
+              response = yield this.requestRaw(info, data);
+              // Check if it's an authentication challenge
               if (
-                parsedUrl.protocol == 'https:' &&
-                parsedUrl.protocol != parsedRedirectUrl.protocol &&
-                !this._allowRedirectDowngrade
+                response &&
+                response.message &&
+                response.message.statusCode === HttpCodes.Unauthorized
               ) {
-                throw new Error(
-                  'Redirect from HTTPS to HTTP protocol. This downgrade is not allowed for security reasons. If you want to allow this behavior, set the allowRedirectDowngrade option to true.'
-                );
-              }
-              // we need to finish reading the response before reassigning response
-              // which will leak the open socket.
-              await response.readBody();
-              // strip authorization header if redirected to a different hostname
-              if (parsedRedirectUrl.hostname !== parsedUrl.hostname) {
-                for (let header in headers) {
-                  // header names are case insensitive
-                  if (header.toLowerCase() === 'authorization') {
-                    delete headers[header];
+                let authenticationHandler;
+                for (const handler of this.handlers) {
+                  if (handler.canHandleAuthentication(response)) {
+                    authenticationHandler = handler;
+                    break;
                   }
                 }
+                if (authenticationHandler) {
+                  return authenticationHandler.handleAuthentication(this, info, data);
+                } else {
+                  // We have received an unauthorized response but have no handlers to handle it.
+                  // Let the response return to the caller.
+                  return response;
+                }
               }
-              // let's make the request with the new redirectUrl
-              info = this._prepareRequest(verb, parsedRedirectUrl, headers);
-              response = await this.requestRaw(info, data);
-              redirectsRemaining--;
-            }
-            if (HttpResponseRetryCodes.indexOf(response.message.statusCode) == -1) {
-              // If not a retry code, return immediately instead of retrying
-              return response;
-            }
-            numTries += 1;
-            if (numTries < maxTries) {
-              await response.readBody();
-              await this._performExponentialBackoff(numTries);
-            }
-          }
-          return response;
+              let redirectsRemaining = this._maxRedirects;
+              while (
+                response.message.statusCode &&
+                HttpRedirectCodes.includes(response.message.statusCode) &&
+                this._allowRedirects &&
+                redirectsRemaining > 0
+              ) {
+                const redirectUrl = response.message.headers['location'];
+                if (!redirectUrl) {
+                  // if there's no location to redirect to, we won't
+                  break;
+                }
+                const parsedRedirectUrl = new URL(redirectUrl);
+                if (
+                  parsedUrl.protocol === 'https:' &&
+                  parsedUrl.protocol !== parsedRedirectUrl.protocol &&
+                  !this._allowRedirectDowngrade
+                ) {
+                  throw new Error(
+                    'Redirect from HTTPS to HTTP protocol. This downgrade is not allowed for security reasons. If you want to allow this behavior, set the allowRedirectDowngrade option to true.'
+                  );
+                }
+                // we need to finish reading the response before reassigning response
+                // which will leak the open socket.
+                yield response.readBody();
+                // strip authorization header if redirected to a different hostname
+                if (parsedRedirectUrl.hostname !== parsedUrl.hostname) {
+                  for (const header in headers) {
+                    // header names are case insensitive
+                    if (header.toLowerCase() === 'authorization') {
+                      delete headers[header];
+                    }
+                  }
+                }
+                // let's make the request with the new redirectUrl
+                info = this._prepareRequest(verb, parsedRedirectUrl, headers);
+                response = yield this.requestRaw(info, data);
+                redirectsRemaining--;
+              }
+              if (
+                !response.message.statusCode ||
+                !HttpResponseRetryCodes.includes(response.message.statusCode)
+              ) {
+                // If not a retry code, return immediately instead of retrying
+                return response;
+              }
+              numTries += 1;
+              if (numTries < maxTries) {
+                yield response.readBody();
+                yield this._performExponentialBackoff(numTries);
+              }
+            } while (numTries < maxTries);
+            return response;
+          });
         }
         /**
          * Needs to be called if keepAlive is set to true in request options.
@@ -4988,14 +6619,20 @@
          * @param data
          */
         requestRaw(info, data) {
-          return new Promise((resolve, reject) => {
-            let callbackForResult = function (err, res) {
-              if (err) {
-                reject(err);
+          return __awaiter(this, void 0, void 0, function* () {
+            return new Promise((resolve, reject) => {
+              function callbackForResult(err, res) {
+                if (err) {
+                  reject(err);
+                } else if (!res) {
+                  // If `err` is not passed, then `res` must be passed.
+                  reject(new Error('Unknown error'));
+                } else {
+                  resolve(res);
+                }
               }
-              resolve(res);
-            };
-            this.requestRawWithCallback(info, data, callbackForResult);
+              this.requestRawWithCallback(info, data, callbackForResult);
+            });
           });
         }
         /**
@@ -5005,21 +6642,24 @@
          * @param onResult
          */
         requestRawWithCallback(info, data, onResult) {
-          let socket;
           if (typeof data === 'string') {
+            if (!info.options.headers) {
+              info.options.headers = {};
+            }
             info.options.headers['Content-Length'] = Buffer.byteLength(data, 'utf8');
           }
           let callbackCalled = false;
-          let handleResult = (err, res) => {
+          function handleResult(err, res) {
             if (!callbackCalled) {
               callbackCalled = true;
               onResult(err, res);
             }
-          };
-          let req = info.httpModule.request(info.options, msg => {
-            let res = new HttpClientResponse(msg);
-            handleResult(null, res);
+          }
+          const req = info.httpModule.request(info.options, msg => {
+            const res = new HttpClientResponse(msg);
+            handleResult(undefined, res);
           });
+          let socket;
           req.on('socket', sock => {
             socket = sock;
           });
@@ -5028,12 +6668,12 @@
             if (socket) {
               socket.end();
             }
-            handleResult(new Error('Request timeout: ' + info.options.path), null);
+            handleResult(new Error(`Request timeout: ${info.options.path}`));
           });
           req.on('error', function (err) {
             // err has statusCode property
             // res should have headers
-            handleResult(err, null);
+            handleResult(err);
           });
           if (data && typeof data === 'string') {
             req.write(data, 'utf8');
@@ -5053,7 +6693,7 @@
          * @param serverUrl  The server URL where the request will be sent. For example, https://api.github.com
          */
         getAgent(serverUrl) {
-          let parsedUrl = new URL(serverUrl);
+          const parsedUrl = new URL(serverUrl);
           return this._getAgent(parsedUrl);
         }
         _prepareRequest(method, requestUrl, headers) {
@@ -5074,27 +6714,23 @@
           info.options.agent = this._getAgent(info.parsedUrl);
           // gives handlers an opportunity to participate
           if (this.handlers) {
-            this.handlers.forEach(handler => {
+            for (const handler of this.handlers) {
               handler.prepareRequest(info.options);
-            });
+            }
           }
           return info;
         }
         _mergeHeaders(headers) {
-          const lowercaseKeys = obj =>
-            Object.keys(obj).reduce((c, k) => ((c[k.toLowerCase()] = obj[k]), c), {});
           if (this.requestOptions && this.requestOptions.headers) {
             return Object.assign(
               {},
               lowercaseKeys(this.requestOptions.headers),
-              lowercaseKeys(headers)
+              lowercaseKeys(headers || {})
             );
           }
           return lowercaseKeys(headers || {});
         }
         _getExistingOrDefaultHeader(additionalHeaders, header, _default) {
-          const lowercaseKeys = obj =>
-            Object.keys(obj).reduce((c, k) => ((c[k.toLowerCase()] = obj[k]), c), {});
           let clientHeader;
           if (this.requestOptions && this.requestOptions.headers) {
             clientHeader = lowercaseKeys(this.requestOptions.headers)[header];
@@ -5103,8 +6739,8 @@
         }
         _getAgent(parsedUrl) {
           let agent;
-          let proxyUrl = pm.getProxyUrl(parsedUrl);
-          let useProxy = proxyUrl && proxyUrl.hostname;
+          const proxyUrl = pm.getProxyUrl(parsedUrl);
+          const useProxy = proxyUrl && proxyUrl.hostname;
           if (this._keepAlive && useProxy) {
             agent = this._proxyAgent;
           }
@@ -5112,29 +6748,28 @@
             agent = this._agent;
           }
           // if agent is already assigned use that agent.
-          if (!!agent) {
+          if (agent) {
             return agent;
           }
           const usingSsl = parsedUrl.protocol === 'https:';
           let maxSockets = 100;
-          if (!!this.requestOptions) {
+          if (this.requestOptions) {
             maxSockets = this.requestOptions.maxSockets || http.globalAgent.maxSockets;
           }
-          if (useProxy) {
-            // If using proxy, need tunnel
-            if (!tunnel) {
-              tunnel = __nccwpck_require__(4294);
-            }
+          // This is `useProxy` again, but we need to check `proxyURl` directly for TypeScripts's flow analysis.
+          if (proxyUrl && proxyUrl.hostname) {
             const agentOptions = {
-              maxSockets: maxSockets,
+              maxSockets,
               keepAlive: this._keepAlive,
-              proxy: {
-                ...((proxyUrl.username || proxyUrl.password) && {
-                  proxyAuth: `${proxyUrl.username}:${proxyUrl.password}`
-                }),
-                host: proxyUrl.hostname,
-                port: proxyUrl.port
-              }
+              proxy: Object.assign(
+                Object.assign(
+                  {},
+                  (proxyUrl.username || proxyUrl.password) && {
+                    proxyAuth: `${proxyUrl.username}:${proxyUrl.password}`
+                  }
+                ),
+                { host: proxyUrl.hostname, port: proxyUrl.port }
+              )
             };
             let tunnelAgent;
             const overHttps = proxyUrl.protocol === 'https:';
@@ -5148,7 +6783,7 @@
           }
           // if reusing agent across request and tunneling agent isn't assigned create a new agent
           if (this._keepAlive && !agent) {
-            const options = { keepAlive: this._keepAlive, maxSockets: maxSockets };
+            const options = { keepAlive: this._keepAlive, maxSockets };
             agent = usingSsl ? new https.Agent(options) : new http.Agent(options);
             this._agent = agent;
           }
@@ -5167,101 +6802,121 @@
           return agent;
         }
         _performExponentialBackoff(retryNumber) {
-          retryNumber = Math.min(ExponentialBackoffCeiling, retryNumber);
-          const ms = ExponentialBackoffTimeSlice * Math.pow(2, retryNumber);
-          return new Promise(resolve => setTimeout(() => resolve(), ms));
+          return __awaiter(this, void 0, void 0, function* () {
+            retryNumber = Math.min(ExponentialBackoffCeiling, retryNumber);
+            const ms = ExponentialBackoffTimeSlice * Math.pow(2, retryNumber);
+            return new Promise(resolve => setTimeout(() => resolve(), ms));
+          });
         }
-        static dateTimeDeserializer(key, value) {
-          if (typeof value === 'string') {
-            let a = new Date(value);
-            if (!isNaN(a.valueOf())) {
-              return a;
-            }
-          }
-          return value;
-        }
-        async _processResponse(res, options) {
-          return new Promise(async (resolve, reject) => {
-            const statusCode = res.message.statusCode;
-            const response = {
-              statusCode: statusCode,
-              result: null,
-              headers: {}
-            };
-            // not found leads to null obj returned
-            if (statusCode == HttpCodes.NotFound) {
-              resolve(response);
-            }
-            let obj;
-            let contents;
-            // get the result from the body
-            try {
-              contents = await res.readBody();
-              if (contents && contents.length > 0) {
-                if (options && options.deserializeDates) {
-                  obj = JSON.parse(contents, HttpClient.dateTimeDeserializer);
-                } else {
-                  obj = JSON.parse(contents);
+        _processResponse(res, options) {
+          return __awaiter(this, void 0, void 0, function* () {
+            return new Promise((resolve, reject) =>
+              __awaiter(this, void 0, void 0, function* () {
+                const statusCode = res.message.statusCode || 0;
+                const response = {
+                  statusCode,
+                  result: null,
+                  headers: {}
+                };
+                // not found leads to null obj returned
+                if (statusCode === HttpCodes.NotFound) {
+                  resolve(response);
                 }
-                response.result = obj;
-              }
-              response.headers = res.message.headers;
-            } catch (err) {
-              // Invalid resource (contents not json);  leaving result obj null
-            }
-            // note that 3xx redirects are handled by the http layer.
-            if (statusCode > 299) {
-              let msg;
-              // if exception/error in body, attempt to get better error
-              if (obj && obj.message) {
-                msg = obj.message;
-              } else if (contents && contents.length > 0) {
-                // it may be the case that the exception is in the body message as string
-                msg = contents;
-              } else {
-                msg = 'Failed request: (' + statusCode + ')';
-              }
-              let err = new HttpClientError(msg, statusCode);
-              err.result = response.result;
-              reject(err);
-            } else {
-              resolve(response);
-            }
+                // get the result from the body
+                function dateTimeDeserializer(key, value) {
+                  if (typeof value === 'string') {
+                    const a = new Date(value);
+                    if (!isNaN(a.valueOf())) {
+                      return a;
+                    }
+                  }
+                  return value;
+                }
+                let obj;
+                let contents;
+                try {
+                  contents = yield res.readBody();
+                  if (contents && contents.length > 0) {
+                    if (options && options.deserializeDates) {
+                      obj = JSON.parse(contents, dateTimeDeserializer);
+                    } else {
+                      obj = JSON.parse(contents);
+                    }
+                    response.result = obj;
+                  }
+                  response.headers = res.message.headers;
+                } catch (err) {
+                  // Invalid resource (contents not json);  leaving result obj null
+                }
+                // note that 3xx redirects are handled by the http layer.
+                if (statusCode > 299) {
+                  let msg;
+                  // if exception/error in body, attempt to get better error
+                  if (obj && obj.message) {
+                    msg = obj.message;
+                  } else if (contents && contents.length > 0) {
+                    // it may be the case that the exception is in the body message as string
+                    msg = contents;
+                  } else {
+                    msg = `Failed request: (${statusCode})`;
+                  }
+                  const err = new HttpClientError(msg, statusCode);
+                  err.result = response.result;
+                  reject(err);
+                } else {
+                  resolve(response);
+                }
+              })
+            );
           });
         }
       }
       exports.HttpClient = HttpClient;
+      const lowercaseKeys = obj =>
+        Object.keys(obj).reduce((c, k) => ((c[k.toLowerCase()] = obj[k]), c), {});
+      //# sourceMappingURL=index.js.map
 
       /***/
     },
 
-    /***/ 6443: /***/ (__unused_webpack_module, exports) => {
+    /***/ 9835: /***/ (__unused_webpack_module, exports) => {
       'use strict';
 
       Object.defineProperty(exports, '__esModule', { value: true });
+      exports.checkBypass = exports.getProxyUrl = void 0;
       function getProxyUrl(reqUrl) {
-        let usingSsl = reqUrl.protocol === 'https:';
-        let proxyUrl;
+        const usingSsl = reqUrl.protocol === 'https:';
         if (checkBypass(reqUrl)) {
-          return proxyUrl;
+          return undefined;
         }
-        let proxyVar;
-        if (usingSsl) {
-          proxyVar = process.env['https_proxy'] || process.env['HTTPS_PROXY'];
-        } else {
-          proxyVar = process.env['http_proxy'] || process.env['HTTP_PROXY'];
-        }
+        const proxyVar = (() => {
+          if (usingSsl) {
+            return process.env['https_proxy'] || process.env['HTTPS_PROXY'];
+          } else {
+            return process.env['http_proxy'] || process.env['HTTP_PROXY'];
+          }
+        })();
         if (proxyVar) {
-          proxyUrl = new URL(proxyVar);
+          try {
+            return new URL(proxyVar);
+          } catch (_a) {
+            if (!proxyVar.startsWith('http://') && !proxyVar.startsWith('https://'))
+              return new URL(`http://${proxyVar}`);
+          }
+        } else {
+          return undefined;
         }
-        return proxyUrl;
       }
       exports.getProxyUrl = getProxyUrl;
       function checkBypass(reqUrl) {
         if (!reqUrl.hostname) {
           return false;
         }
-        let noProxy = process.env['no_proxy'] || process.env['NO_PROXY'] || '';
+        const reqHost = reqUrl.hostname;
+        if (isLoopbackAddress(reqHost)) {
+          return true;
+        }
+        const noProxy = process.env['no_proxy'] || process.env['NO_PROXY'] || '';
         if (!noProxy) {
           return false;
         }
@@ -5275,22 +6930,40 @@
           reqPort = 443;
         }
         // Format the request hostname and hostname with port
-        let upperReqHosts = [reqUrl.hostname.toUpperCase()];
+        const upperReqHosts = [reqUrl.hostname.toUpperCase()];
         if (typeof reqPort === 'number') {
           upperReqHosts.push(`${upperReqHosts[0]}:${reqPort}`);
         }
         // Compare request host against noproxy
-        for (let upperNoProxyItem of noProxy
+        for (const upperNoProxyItem of noProxy
           .split(',')
           .map(x => x.trim().toUpperCase())
           .filter(x => x)) {
-          if (upperReqHosts.some(x => x === upperNoProxyItem)) {
+          if (
+            upperNoProxyItem === '*' ||
+            upperReqHosts.some(
+              x =>
+                x === upperNoProxyItem ||
+                x.endsWith(`.${upperNoProxyItem}`) ||
+                (upperNoProxyItem.startsWith('.') && x.endsWith(`${upperNoProxyItem}`))
+            )
+          ) {
             return true;
           }
         }
         return false;
       }
       exports.checkBypass = checkBypass;
+      function isLoopbackAddress(host) {
+        const hostLower = host.toLowerCase();
+        return (
+          hostLower === 'localhost' ||
+          hostLower.startsWith('127.') ||
+          hostLower.startsWith('[::1]') ||
+          hostLower.startsWith('[0:0:0:0:0:0:0:1]')
+        );
+      }
+      //# sourceMappingURL=proxy.js.map
 
       /***/
     },
@@ -5298,6 +6971,43 @@
     /***/ 1962: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
       'use strict';
 
+      var __createBinding =
+        (this && this.__createBinding) ||
+        (Object.create
+          ? function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              Object.defineProperty(o, k2, {
+                enumerable: true,
+                get: function () {
+                  return m[k];
+                }
+              });
+            }
+          : function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              o[k2] = m[k];
+            });
+      var __setModuleDefault =
+        (this && this.__setModuleDefault) ||
+        (Object.create
+          ? function (o, v) {
+              Object.defineProperty(o, 'default', { enumerable: true, value: v });
+            }
+          : function (o, v) {
+              o['default'] = v;
+            });
+      var __importStar =
+        (this && this.__importStar) ||
+        function (mod) {
+          if (mod && mod.__esModule) return mod;
+          var result = {};
+          if (mod != null)
+            for (var k in mod)
+              if (k !== 'default' && Object.hasOwnProperty.call(mod, k))
+                __createBinding(result, mod, k);
+          __setModuleDefault(result, mod);
+          return result;
+        };
       var __awaiter =
         (this && this.__awaiter) ||
         function (thisArg, _arguments, P, generator) {
@@ -5329,34 +7039,52 @@
             step((generator = generator.apply(thisArg, _arguments || [])).next());
           });
         };
-      var __importStar =
-        (this && this.__importStar) ||
-        function (mod) {
-          if (mod && mod.__esModule) return mod;
-          var result = {};
-          if (mod != null)
-            for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
-          result['default'] = mod;
-          return result;
-        };
       var _a;
       Object.defineProperty(exports, '__esModule', { value: true });
-      const assert_1 = __nccwpck_require__(2357);
+      exports.getCmdPath =
+        exports.tryGetExecutablePath =
+        exports.isRooted =
+        exports.isDirectory =
+        exports.exists =
+        exports.READONLY =
+        exports.UV_FS_O_EXLOCK =
+        exports.IS_WINDOWS =
+        exports.unlink =
+        exports.symlink =
+        exports.stat =
+        exports.rmdir =
+        exports.rm =
+        exports.rename =
+        exports.readlink =
+        exports.readdir =
+        exports.open =
+        exports.mkdir =
+        exports.lstat =
+        exports.copyFile =
+        exports.chmod =
+          void 0;
       const fs = __importStar(__nccwpck_require__(5747));
       const path = __importStar(__nccwpck_require__(5622));
       (_a = fs.promises),
+        // export const {open} = 'fs'
         (exports.chmod = _a.chmod),
         (exports.copyFile = _a.copyFile),
         (exports.lstat = _a.lstat),
         (exports.mkdir = _a.mkdir),
+        (exports.open = _a.open),
         (exports.readdir = _a.readdir),
         (exports.readlink = _a.readlink),
         (exports.rename = _a.rename),
+        (exports.rm = _a.rm),
         (exports.rmdir = _a.rmdir),
         (exports.stat = _a.stat),
         (exports.symlink = _a.symlink),
         (exports.unlink = _a.unlink);
+      // export const {open} = 'fs'
       exports.IS_WINDOWS = process.platform === 'win32';
+      // See https://github.com/nodejs/node/blob/d0153aee367422d0858105abec186da4dff0a0c5/deps/uv/include/uv/win.h#L691
+      exports.UV_FS_O_EXLOCK = 0x10000000;
+      exports.READONLY = fs.constants.O_RDONLY;
       function exists(fsPath) {
         return __awaiter(this, void 0, void 0, function* () {
           try {
@@ -5395,45 +7123,6 @@
         return p.startsWith('/');
       }
       exports.isRooted = isRooted;
-      /**
-       * Recursively create a directory at `fsPath`.
-       *
-       * This implementation is optimistic, meaning it attempts to create the full
-       * path first, and backs up the path stack from there.
-       *
-       * @param fsPath The path to create
-       * @param maxDepth The maximum recursion depth
-       * @param depth The current recursion depth
-       */
-      function mkdirP(fsPath, maxDepth = 1000, depth = 1) {
-        return __awaiter(this, void 0, void 0, function* () {
-          assert_1.ok(fsPath, 'a path argument must be provided');
-          fsPath = path.resolve(fsPath);
-          if (depth >= maxDepth) return exports.mkdir(fsPath);
-          try {
-            yield exports.mkdir(fsPath);
-            return;
-          } catch (err) {
-            switch (err.code) {
-              case 'ENOENT': {
-                yield mkdirP(path.dirname(fsPath), maxDepth, depth + 1);
-                yield exports.mkdir(fsPath);
-                return;
-              }
-              default: {
-                let stats;
-                try {
-                  stats = yield exports.stat(fsPath);
-                } catch (err2) {
-                  throw err;
-                }
-                if (!stats.isDirectory()) throw err;
-              }
-            }
-          }
-        });
-      }
-      exports.mkdirP = mkdirP;
       /**
        * Best effort attempt to determine whether a file exists and is executable.
        * @param filePath    file path to check
@@ -5533,6 +7222,12 @@
           ((stats.mode & 64) > 0 && stats.uid === process.getuid())
         );
       }
+      // Get the path of cmd.exe in windows
+      function getCmdPath() {
+        var _a;
+        return (_a = process.env['COMSPEC']) !== null && _a !== void 0 ? _a : `cmd.exe`;
+      }
+      exports.getCmdPath = getCmdPath;
       //# sourceMappingURL=io-util.js.map
 
       /***/
@@ -5541,6 +7236,43 @@
     /***/ 7436: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
       'use strict';
 
+      var __createBinding =
+        (this && this.__createBinding) ||
+        (Object.create
+          ? function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              Object.defineProperty(o, k2, {
+                enumerable: true,
+                get: function () {
+                  return m[k];
+                }
+              });
+            }
+          : function (o, m, k, k2) {
+              if (k2 === undefined) k2 = k;
+              o[k2] = m[k];
+            });
+      var __setModuleDefault =
+        (this && this.__setModuleDefault) ||
+        (Object.create
+          ? function (o, v) {
+              Object.defineProperty(o, 'default', { enumerable: true, value: v });
+            }
+          : function (o, v) {
+              o['default'] = v;
+            });
+      var __importStar =
+        (this && this.__importStar) ||
+        function (mod) {
+          if (mod && mod.__esModule) return mod;
+          var result = {};
+          if (mod != null)
+            for (var k in mod)
+              if (k !== 'default' && Object.hasOwnProperty.call(mod, k))
+                __createBinding(result, mod, k);
+          __setModuleDefault(result, mod);
+          return result;
+        };
       var __awaiter =
         (this && this.__awaiter) ||
         function (thisArg, _arguments, P, generator) {
@@ -5572,22 +7304,17 @@
             step((generator = generator.apply(thisArg, _arguments || [])).next());
           });
         };
-      var __importStar =
-        (this && this.__importStar) ||
-        function (mod) {
-          if (mod && mod.__esModule) return mod;
-          var result = {};
-          if (mod != null)
-            for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
-          result['default'] = mod;
-          return result;
-        };
       Object.defineProperty(exports, '__esModule', { value: true });
-      const childProcess = __importStar(__nccwpck_require__(3129));
+      exports.findInPath =
+        exports.which =
+        exports.mkdirP =
+        exports.rmRF =
+        exports.mv =
+        exports.cp =
+          void 0;
+      const assert_1 = __nccwpck_require__(2357);
       const path = __importStar(__nccwpck_require__(5622));
-      const util_1 = __nccwpck_require__(1669);
       const ioUtil = __importStar(__nccwpck_require__(1962));
-      const exec = util_1.promisify(childProcess.exec);
       /**
        * Copies a file or folder.
        * Based off of shelljs - https://github.com/shelljs/shelljs/blob/9237f66c52e5daa40458f94f9565e18e8132f5a6/src/cp.js
@@ -5598,7 +7325,7 @@
        */
       function cp(source, dest, options = {}) {
         return __awaiter(this, void 0, void 0, function* () {
-          const { force, recursive } = readCopyOptions(options);
+          const { force, recursive, copySourceDirectory } = readCopyOptions(options);
           const destStat = (yield ioUtil.exists(dest)) ? yield ioUtil.stat(dest) : null;
           // Dest is an existing file, but not forcing
           if (destStat && destStat.isFile() && !force) {
@@ -5606,7 +7333,9 @@
           }
           // If dest is an existing directory, should copy inside.
           const newDest =
-            destStat && destStat.isDirectory() ? path.join(dest, path.basename(source)) : dest;
+            destStat && destStat.isDirectory() && copySourceDirectory
+              ? path.join(dest, path.basename(source))
+              : dest;
           if (!(yield ioUtil.exists(source))) {
             throw new Error(`no such file or directory: ${source}`);
           }
@@ -5666,42 +7395,22 @@
       function rmRF(inputPath) {
         return __awaiter(this, void 0, void 0, function* () {
           if (ioUtil.IS_WINDOWS) {
-            // Node doesn't provide a delete operation, only an unlink function. This means that if the file is being used by another
-            // program (e.g. antivirus), it won't be deleted. To address this, we shell out the work to rd/del.
-            try {
-              if (yield ioUtil.isDirectory(inputPath, true)) {
-                yield exec(`rd /s /q "${inputPath}"`);
-              } else {
-                yield exec(`del /f /a "${inputPath}"`);
-              }
-            } catch (err) {
-              // if you try to delete a file that doesn't exist, desired result is achieved
-              // other errors are valid
-              if (err.code !== 'ENOENT') throw err;
+            // Check for invalid characters
+            // https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file
+            if (/[*"<>|]/.test(inputPath)) {
+              throw new Error('File path must not contain `*`, `"`, `<`, `>` or `|` on Windows');
             }
-            // Shelling out fails to remove a symlink folder with missing source, this unlink catches that
-            try {
-              yield ioUtil.unlink(inputPath);
-            } catch (err) {
-              // if you try to delete a file that doesn't exist, desired result is achieved
-              // other errors are valid
-              if (err.code !== 'ENOENT') throw err;
-            }
-          } else {
-            let isDir = false;
-            try {
-              isDir = yield ioUtil.isDirectory(inputPath);
-            } catch (err) {
-              // if you try to delete a file that doesn't exist, desired result is achieved
-              // other errors are valid
-              if (err.code !== 'ENOENT') throw err;
-              return;
-            }
-            if (isDir) {
-              yield exec(`rm -rf "${inputPath}"`);
-            } else {
-              yield ioUtil.unlink(inputPath);
-            }
+          }
+          try {
+            // note if path does not exist, error is silent
+            yield ioUtil.rm(inputPath, {
+              force: true,
+              maxRetries: 3,
+              recursive: true,
+              retryDelay: 300
+            });
+          } catch (err) {
+            throw new Error(`File was unable to be removed ${err}`);
           }
         });
       }
@@ -5715,7 +7424,8 @@
        */
       function mkdirP(fsPath) {
         return __awaiter(this, void 0, void 0, function* () {
-          yield ioUtil.mkdirP(fsPath);
+          assert_1.ok(fsPath, 'a path argument must be provided');
+          yield ioUtil.mkdir(fsPath, { recursive: true });
         });
       }
       exports.mkdirP = mkdirP;
@@ -5819,7 +7529,9 @@
       function readCopyOptions(options) {
         const force = options.force == null ? true : options.force;
         const recursive = Boolean(options.recursive);
-        return { force, recursive };
+        const copySourceDirectory =
+          options.copySourceDirectory == null ? true : Boolean(options.copySourceDirectory);
+        return { force, recursive, copySourceDirectory };
       }
       function cpDirRecursive(sourceDir, destDir, currentDepth, force) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -5872,17 +7584,16 @@
       /***/
     },
 
-    /***/ 2557: /***/ (__unused_webpack_module, exports, __nccwpck_require__) => {
+    /***/ 2557: /***/ (__unused_webpack_module, exports) => {
       'use strict';
 
       Object.defineProperty(exports, '__esModule', { value: true });
 
-      var tslib = __nccwpck_require__(9268);
-
       // Copyright (c) Microsoft Corporation.
       // Licensed under the MIT license.
-      var listenersMap = new WeakMap();
-      var abortedMap = new WeakMap();
+      /// <reference path="../shims-public.d.ts" />
+      const listenersMap = new WeakMap();
+      const abortedMap = new WeakMap();
       /**
        * An aborter instance implements AbortSignal interface, can abort HTTP requests.
        *
@@ -5896,8 +7607,8 @@
        * await doAsyncWork(AbortSignal.none);
        * ```
        */
-      var AbortSignal = /** @class */ (function () {
-        function AbortSignal() {
+      class AbortSignal {
+        constructor() {
           /**
            * onabort event listener.
            */
@@ -5905,40 +7616,32 @@
           listenersMap.set(this, []);
           abortedMap.set(this, false);
         }
-        Object.defineProperty(AbortSignal.prototype, 'aborted', {
-          /**
-           * Status of whether aborted or not.
-           *
-           * @readonly
-           */
-          get: function () {
-            if (!abortedMap.has(this)) {
-              throw new TypeError('Expected `this` to be an instance of AbortSignal.');
-            }
-            return abortedMap.get(this);
-          },
-          enumerable: false,
-          configurable: true
-        });
-        Object.defineProperty(AbortSignal, 'none', {
-          /**
-           * Creates a new AbortSignal instance that will never be aborted.
-           *
-           * @readonly
-           */
-          get: function () {
-            return new AbortSignal();
-          },
-          enumerable: false,
-          configurable: true
-        });
+        /**
+         * Status of whether aborted or not.
+         *
+         * @readonly
+         */
+        get aborted() {
+          if (!abortedMap.has(this)) {
+            throw new TypeError('Expected `this` to be an instance of AbortSignal.');
+          }
+          return abortedMap.get(this);
+        }
+        /**
+         * Creates a new AbortSignal instance that will never be aborted.
+         *
+         * @readonly
+         */
+        static get none() {
+          return new AbortSignal();
+        }
         /**
          * Added new "abort" event listener, only support "abort" event.
          *
          * @param _type - Only support "abort" event
          * @param listener - The listener to be added
          */
-        AbortSignal.prototype.addEventListener = function (
+        addEventListener(
           // tslint:disable-next-line:variable-name
           _type,
           listener
@@ -5946,16 +7649,16 @@
           if (!listenersMap.has(this)) {
             throw new TypeError('Expected `this` to be an instance of AbortSignal.');
           }
-          var listeners = listenersMap.get(this);
+          const listeners = listenersMap.get(this);
           listeners.push(listener);
-        };
+        }
         /**
          * Remove "abort" event listener, only support "abort" event.
          *
          * @param _type - Only support "abort" event
          * @param listener - The listener to be removed
          */
-        AbortSignal.prototype.removeEventListener = function (
+        removeEventListener(
           // tslint:disable-next-line:variable-name
           _type,
           listener
@@ -5963,22 +7666,21 @@
           if (!listenersMap.has(this)) {
             throw new TypeError('Expected `this` to be an instance of AbortSignal.');
           }
-          var listeners = listenersMap.get(this);
-          var index = listeners.indexOf(listener);
+          const listeners = listenersMap.get(this);
+          const index = listeners.indexOf(listener);
           if (index > -1) {
             listeners.splice(index, 1);
           }
-        };
+        }
         /**
          * Dispatches a synthetic event to the AbortSignal.
          */
-        AbortSignal.prototype.dispatchEvent = function (_event) {
+        dispatchEvent(_event) {
           throw new Error(
             'This is a stub dispatchEvent implementation that should not be used.  It only exists for type-checking purposes.'
           );
-        };
-        return AbortSignal;
-      })();
+        }
+      }
       /**
        * Helper to trigger an abort event immediately, the onabort and all abort event listeners will be triggered.
        * Will try to trigger abort event for all linked AbortSignal nodes.
@@ -5996,12 +7698,12 @@
         if (signal.onabort) {
           signal.onabort.call(signal);
         }
-        var listeners = listenersMap.get(signal);
+        const listeners = listenersMap.get(signal);
         if (listeners) {
           // Create a copy of listeners so mutations to the array
           // (e.g. via removeListener calls) don't affect the listeners
           // we invoke.
-          listeners.slice().forEach(function (listener) {
+          listeners.slice().forEach(listener => {
             listener.call(signal, { type: 'abort' });
           });
         }
@@ -6027,15 +7729,12 @@
        * }
        * ```
        */
-      var AbortError = /** @class */ (function (_super) {
-        tslib.__extends(AbortError, _super);
-        function AbortError(message) {
-          var _this = _super.call(this, message) || this;
-          _this.name = 'AbortError';
-          return _this;
+      class AbortError extends Error {
+        constructor(message) {
+          super(message);
+          this.name = 'AbortError';
         }
-        return AbortError;
-      })(Error);
+      }
       /**
        * An AbortController provides an AbortSignal and the associated controls to signal
        * that an asynchronous operation should be aborted.
@@ -6070,10 +7769,9 @@
        * await doAsyncWork(aborter.withTimeout(25 * 1000));
        * ```
        */
-      var AbortController = /** @class */ (function () {
+      class AbortController {
         // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
-        function AbortController(parentSignals) {
-          var _this = this;
+        constructor(parentSignals) {
           this._signal = new AbortSignal();
           if (!parentSignals) {
             return;
@@ -6083,612 +7781,54 @@
             // eslint-disable-next-line prefer-rest-params
             parentSignals = arguments;
           }
-          for (var _i = 0, parentSignals_1 = parentSignals; _i < parentSignals_1.length; _i++) {
-            var parentSignal = parentSignals_1[_i];
+          for (const parentSignal of parentSignals) {
             // if the parent signal has already had abort() called,
             // then call abort on this signal as well.
             if (parentSignal.aborted) {
               this.abort();
             } else {
               // when the parent signal aborts, this signal should as well.
-              parentSignal.addEventListener('abort', function () {
-                _this.abort();
+              parentSignal.addEventListener('abort', () => {
+                this.abort();
               });
             }
           }
         }
-        Object.defineProperty(AbortController.prototype, 'signal', {
-          /**
-           * The AbortSignal associated with this controller that will signal aborted
-           * when the abort method is called on this controller.
-           *
-           * @readonly
-           */
-          get: function () {
-            return this._signal;
-          },
-          enumerable: false,
-          configurable: true
-        });
+        /**
+         * The AbortSignal associated with this controller that will signal aborted
+         * when the abort method is called on this controller.
+         *
+         * @readonly
+         */
+        get signal() {
+          return this._signal;
+        }
         /**
          * Signal that any operations passed this controller's associated abort signal
          * to cancel any remaining work and throw an `AbortError`.
          */
-        AbortController.prototype.abort = function () {
+        abort() {
           abortSignal(this._signal);
-        };
+        }
         /**
          * Creates a new AbortSignal instance that will abort after the provided ms.
          * @param ms - Elapsed time in milliseconds to trigger an abort.
          */
-        AbortController.timeout = function (ms) {
-          var signal = new AbortSignal();
-          var timer = setTimeout(abortSignal, ms, signal);
+        static timeout(ms) {
+          const signal = new AbortSignal();
+          const timer = setTimeout(abortSignal, ms, signal);
           // Prevent the active Timer from keeping the Node.js event loop active.
           if (typeof timer.unref === 'function') {
             timer.unref();
           }
           return signal;
-        };
-        return AbortController;
-      })();
+        }
+      }
 
       exports.AbortController = AbortController;
       exports.AbortError = AbortError;
       exports.AbortSignal = AbortSignal;
       //# sourceMappingURL=index.js.map
-
-      /***/
-    },
-
-    /***/ 9268: /***/ module => {
-      /*! *****************************************************************************
-Copyright (c) Microsoft Corporation.
-
-Permission to use, copy, modify, and/or distribute this software for any
-purpose with or without fee is hereby granted.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
-LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
-OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-PERFORMANCE OF THIS SOFTWARE.
-***************************************************************************** */
-      /* global global, define, System, Reflect, Promise */
-      var __extends;
-      var __assign;
-      var __rest;
-      var __decorate;
-      var __param;
-      var __metadata;
-      var __awaiter;
-      var __generator;
-      var __exportStar;
-      var __values;
-      var __read;
-      var __spread;
-      var __spreadArrays;
-      var __spreadArray;
-      var __await;
-      var __asyncGenerator;
-      var __asyncDelegator;
-      var __asyncValues;
-      var __makeTemplateObject;
-      var __importStar;
-      var __importDefault;
-      var __classPrivateFieldGet;
-      var __classPrivateFieldSet;
-      var __createBinding;
-      (function (factory) {
-        var root =
-          typeof global === 'object'
-            ? global
-            : typeof self === 'object'
-            ? self
-            : typeof this === 'object'
-            ? this
-            : {};
-        if (typeof define === 'function' && define.amd) {
-          define('tslib', ['exports'], function (exports) {
-            factory(createExporter(root, createExporter(exports)));
-          });
-        } else if (true && typeof module.exports === 'object') {
-          factory(createExporter(root, createExporter(module.exports)));
-        } else {
-          factory(createExporter(root));
-        }
-        function createExporter(exports, previous) {
-          if (exports !== root) {
-            if (typeof Object.create === 'function') {
-              Object.defineProperty(exports, '__esModule', { value: true });
-            } else {
-              exports.__esModule = true;
-            }
-          }
-          return function (id, v) {
-            return (exports[id] = previous ? previous(id, v) : v);
-          };
-        }
-      })(function (exporter) {
-        var extendStatics =
-          Object.setPrototypeOf ||
-          ({ __proto__: [] } instanceof Array &&
-            function (d, b) {
-              d.__proto__ = b;
-            }) ||
-          function (d, b) {
-            for (var p in b) if (Object.prototype.hasOwnProperty.call(b, p)) d[p] = b[p];
-          };
-
-        __extends = function (d, b) {
-          if (typeof b !== 'function' && b !== null)
-            throw new TypeError(
-              'Class extends value ' + String(b) + ' is not a constructor or null'
-            );
-          extendStatics(d, b);
-          function __() {
-            this.constructor = d;
-          }
-          d.prototype = b === null ? Object.create(b) : ((__.prototype = b.prototype), new __());
-        };
-
-        __assign =
-          Object.assign ||
-          function (t) {
-            for (var s, i = 1, n = arguments.length; i < n; i++) {
-              s = arguments[i];
-              for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p)) t[p] = s[p];
-            }
-            return t;
-          };
-
-        __rest = function (s, e) {
-          var t = {};
-          for (var p in s)
-            if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0) t[p] = s[p];
-          if (s != null && typeof Object.getOwnPropertySymbols === 'function')
-            for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
-              if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
-                t[p[i]] = s[p[i]];
-            }
-          return t;
-        };
-
-        __decorate = function (decorators, target, key, desc) {
-          var c = arguments.length,
-            r =
-              c < 3
-                ? target
-                : desc === null
-                ? (desc = Object.getOwnPropertyDescriptor(target, key))
-                : desc,
-            d;
-          if (typeof Reflect === 'object' && typeof Reflect.decorate === 'function')
-            r = Reflect.decorate(decorators, target, key, desc);
-          else
-            for (var i = decorators.length - 1; i >= 0; i--)
-              if ((d = decorators[i]))
-                r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-          return c > 3 && r && Object.defineProperty(target, key, r), r;
-        };
-
-        __param = function (paramIndex, decorator) {
-          return function (target, key) {
-            decorator(target, key, paramIndex);
-          };
-        };
-
-        __metadata = function (metadataKey, metadataValue) {
-          if (typeof Reflect === 'object' && typeof Reflect.metadata === 'function')
-            return Reflect.metadata(metadataKey, metadataValue);
-        };
-
-        __awaiter = function (thisArg, _arguments, P, generator) {
-          function adopt(value) {
-            return value instanceof P
-              ? value
-              : new P(function (resolve) {
-                  resolve(value);
-                });
-          }
-          return new (P || (P = Promise))(function (resolve, reject) {
-            function fulfilled(value) {
-              try {
-                step(generator.next(value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-            function rejected(value) {
-              try {
-                step(generator['throw'](value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-            function step(result) {
-              result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
-            }
-            step((generator = generator.apply(thisArg, _arguments || [])).next());
-          });
-        };
-
-        __generator = function (thisArg, body) {
-          var _ = {
-              label: 0,
-              sent: function () {
-                if (t[0] & 1) throw t[1];
-                return t[1];
-              },
-              trys: [],
-              ops: []
-            },
-            f,
-            y,
-            t,
-            g;
-          return (
-            (g = { next: verb(0), throw: verb(1), return: verb(2) }),
-            typeof Symbol === 'function' &&
-              (g[Symbol.iterator] = function () {
-                return this;
-              }),
-            g
-          );
-          function verb(n) {
-            return function (v) {
-              return step([n, v]);
-            };
-          }
-          function step(op) {
-            if (f) throw new TypeError('Generator is already executing.');
-            while (_)
-              try {
-                if (
-                  ((f = 1),
-                  y &&
-                    (t =
-                      op[0] & 2
-                        ? y['return']
-                        : op[0]
-                        ? y['throw'] || ((t = y['return']) && t.call(y), 0)
-                        : y.next) &&
-                    !(t = t.call(y, op[1])).done)
-                )
-                  return t;
-                if (((y = 0), t)) op = [op[0] & 2, t.value];
-                switch (op[0]) {
-                  case 0:
-                  case 1:
-                    t = op;
-                    break;
-                  case 4:
-                    _.label++;
-                    return { value: op[1], done: false };
-                  case 5:
-                    _.label++;
-                    y = op[1];
-                    op = [0];
-                    continue;
-                  case 7:
-                    op = _.ops.pop();
-                    _.trys.pop();
-                    continue;
-                  default:
-                    if (
-                      !((t = _.trys), (t = t.length > 0 && t[t.length - 1])) &&
-                      (op[0] === 6 || op[0] === 2)
-                    ) {
-                      _ = 0;
-                      continue;
-                    }
-                    if (op[0] === 3 && (!t || (op[1] > t[0] && op[1] < t[3]))) {
-                      _.label = op[1];
-                      break;
-                    }
-                    if (op[0] === 6 && _.label < t[1]) {
-                      _.label = t[1];
-                      t = op;
-                      break;
-                    }
-                    if (t && _.label < t[2]) {
-                      _.label = t[2];
-                      _.ops.push(op);
-                      break;
-                    }
-                    if (t[2]) _.ops.pop();
-                    _.trys.pop();
-                    continue;
-                }
-                op = body.call(thisArg, _);
-              } catch (e) {
-                op = [6, e];
-                y = 0;
-              } finally {
-                f = t = 0;
-              }
-            if (op[0] & 5) throw op[1];
-            return { value: op[0] ? op[1] : void 0, done: true };
-          }
-        };
-
-        __exportStar = function (m, o) {
-          for (var p in m)
-            if (p !== 'default' && !Object.prototype.hasOwnProperty.call(o, p))
-              __createBinding(o, m, p);
-        };
-
-        __createBinding = Object.create
-          ? function (o, m, k, k2) {
-              if (k2 === undefined) k2 = k;
-              Object.defineProperty(o, k2, {
-                enumerable: true,
-                get: function () {
-                  return m[k];
-                }
-              });
-            }
-          : function (o, m, k, k2) {
-              if (k2 === undefined) k2 = k;
-              o[k2] = m[k];
-            };
-
-        __values = function (o) {
-          var s = typeof Symbol === 'function' && Symbol.iterator,
-            m = s && o[s],
-            i = 0;
-          if (m) return m.call(o);
-          if (o && typeof o.length === 'number')
-            return {
-              next: function () {
-                if (o && i >= o.length) o = void 0;
-                return { value: o && o[i++], done: !o };
-              }
-            };
-          throw new TypeError(s ? 'Object is not iterable.' : 'Symbol.iterator is not defined.');
-        };
-
-        __read = function (o, n) {
-          var m = typeof Symbol === 'function' && o[Symbol.iterator];
-          if (!m) return o;
-          var i = m.call(o),
-            r,
-            ar = [],
-            e;
-          try {
-            while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
-          } catch (error) {
-            e = { error: error };
-          } finally {
-            try {
-              if (r && !r.done && (m = i['return'])) m.call(i);
-            } finally {
-              if (e) throw e.error;
-            }
-          }
-          return ar;
-        };
-
-        /** @deprecated */
-        __spread = function () {
-          for (var ar = [], i = 0; i < arguments.length; i++) ar = ar.concat(__read(arguments[i]));
-          return ar;
-        };
-
-        /** @deprecated */
-        __spreadArrays = function () {
-          for (var s = 0, i = 0, il = arguments.length; i < il; i++) s += arguments[i].length;
-          for (var r = Array(s), k = 0, i = 0; i < il; i++)
-            for (var a = arguments[i], j = 0, jl = a.length; j < jl; j++, k++) r[k] = a[j];
-          return r;
-        };
-
-        __spreadArray = function (to, from) {
-          for (var i = 0, il = from.length, j = to.length; i < il; i++, j++) to[j] = from[i];
-          return to;
-        };
-
-        __await = function (v) {
-          return this instanceof __await ? ((this.v = v), this) : new __await(v);
-        };
-
-        __asyncGenerator = function (thisArg, _arguments, generator) {
-          if (!Symbol.asyncIterator) throw new TypeError('Symbol.asyncIterator is not defined.');
-          var g = generator.apply(thisArg, _arguments || []),
-            i,
-            q = [];
-          return (
-            (i = {}),
-            verb('next'),
-            verb('throw'),
-            verb('return'),
-            (i[Symbol.asyncIterator] = function () {
-              return this;
-            }),
-            i
-          );
-          function verb(n) {
-            if (g[n])
-              i[n] = function (v) {
-                return new Promise(function (a, b) {
-                  q.push([n, v, a, b]) > 1 || resume(n, v);
-                });
-              };
-          }
-          function resume(n, v) {
-            try {
-              step(g[n](v));
-            } catch (e) {
-              settle(q[0][3], e);
-            }
-          }
-          function step(r) {
-            r.value instanceof __await
-              ? Promise.resolve(r.value.v).then(fulfill, reject)
-              : settle(q[0][2], r);
-          }
-          function fulfill(value) {
-            resume('next', value);
-          }
-          function reject(value) {
-            resume('throw', value);
-          }
-          function settle(f, v) {
-            if ((f(v), q.shift(), q.length)) resume(q[0][0], q[0][1]);
-          }
-        };
-
-        __asyncDelegator = function (o) {
-          var i, p;
-          return (
-            (i = {}),
-            verb('next'),
-            verb('throw', function (e) {
-              throw e;
-            }),
-            verb('return'),
-            (i[Symbol.iterator] = function () {
-              return this;
-            }),
-            i
-          );
-          function verb(n, f) {
-            i[n] = o[n]
-              ? function (v) {
-                  return (p = !p)
-                    ? { value: __await(o[n](v)), done: n === 'return' }
-                    : f
-                    ? f(v)
-                    : v;
-                }
-              : f;
-          }
-        };
-
-        __asyncValues = function (o) {
-          if (!Symbol.asyncIterator) throw new TypeError('Symbol.asyncIterator is not defined.');
-          var m = o[Symbol.asyncIterator],
-            i;
-          return m
-            ? m.call(o)
-            : ((o = typeof __values === 'function' ? __values(o) : o[Symbol.iterator]()),
-              (i = {}),
-              verb('next'),
-              verb('throw'),
-              verb('return'),
-              (i[Symbol.asyncIterator] = function () {
-                return this;
-              }),
-              i);
-          function verb(n) {
-            i[n] =
-              o[n] &&
-              function (v) {
-                return new Promise(function (resolve, reject) {
-                  (v = o[n](v)), settle(resolve, reject, v.done, v.value);
-                });
-              };
-          }
-          function settle(resolve, reject, d, v) {
-            Promise.resolve(v).then(function (v) {
-              resolve({ value: v, done: d });
-            }, reject);
-          }
-        };
-
-        __makeTemplateObject = function (cooked, raw) {
-          if (Object.defineProperty) {
-            Object.defineProperty(cooked, 'raw', { value: raw });
-          } else {
-            cooked.raw = raw;
-          }
-          return cooked;
-        };
-
-        var __setModuleDefault = Object.create
-          ? function (o, v) {
-              Object.defineProperty(o, 'default', { enumerable: true, value: v });
-            }
-          : function (o, v) {
-              o['default'] = v;
-            };
-
-        __importStar = function (mod) {
-          if (mod && mod.__esModule) return mod;
-          var result = {};
-          if (mod != null)
-            for (var k in mod)
-              if (k !== 'default' && Object.prototype.hasOwnProperty.call(mod, k))
-                __createBinding(result, mod, k);
-          __setModuleDefault(result, mod);
-          return result;
-        };
-
-        __importDefault = function (mod) {
-          return mod && mod.__esModule ? mod : { default: mod };
-        };
-
-        __classPrivateFieldGet = function (receiver, state, kind, f) {
-          if (kind === 'a' && !f)
-            throw new TypeError('Private accessor was defined without a getter');
-          if (typeof state === 'function' ? receiver !== state || !f : !state.has(receiver))
-            throw new TypeError(
-              'Cannot read private member from an object whose class did not declare it'
-            );
-          return kind === 'm'
-            ? f
-            : kind === 'a'
-            ? f.call(receiver)
-            : f
-            ? f.value
-            : state.get(receiver);
-        };
-
-        __classPrivateFieldSet = function (receiver, state, value, kind, f) {
-          if (kind === 'm') throw new TypeError('Private method is not writable');
-          if (kind === 'a' && !f)
-            throw new TypeError('Private accessor was defined without a setter');
-          if (typeof state === 'function' ? receiver !== state || !f : !state.has(receiver))
-            throw new TypeError(
-              'Cannot write private member to an object whose class did not declare it'
-            );
-          return (
-            kind === 'a'
-              ? f.call(receiver, value)
-              : f
-              ? (f.value = value)
-              : state.set(receiver, value),
-            value
-          );
-        };
-
-        exporter('__extends', __extends);
-        exporter('__assign', __assign);
-        exporter('__rest', __rest);
-        exporter('__decorate', __decorate);
-        exporter('__param', __param);
-        exporter('__metadata', __metadata);
-        exporter('__awaiter', __awaiter);
-        exporter('__generator', __generator);
-        exporter('__exportStar', __exportStar);
-        exporter('__createBinding', __createBinding);
-        exporter('__values', __values);
-        exporter('__read', __read);
-        exporter('__spread', __spread);
-        exporter('__spreadArrays', __spreadArrays);
-        exporter('__spreadArray', __spreadArray);
-        exporter('__await', __await);
-        exporter('__asyncGenerator', __asyncGenerator);
-        exporter('__asyncDelegator', __asyncDelegator);
-        exporter('__asyncValues', __asyncValues);
-        exporter('__makeTemplateObject', __makeTemplateObject);
-        exporter('__importStar', __importStar);
-        exporter('__importDefault', __importDefault);
-        exporter('__classPrivateFieldGet', __classPrivateFieldGet);
-        exporter('__classPrivateFieldSet', __classPrivateFieldSet);
-      });
 
       /***/
     },
@@ -43803,1522 +44943,6 @@ PERFORMANCE OF THIS SOFTWARE.
       /***/
     },
 
-    /***/ 5977: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
-      'use strict';
-
-      var __awaiter =
-        (this && this.__awaiter) ||
-        function (thisArg, _arguments, P, generator) {
-          function adopt(value) {
-            return value instanceof P
-              ? value
-              : new P(function (resolve) {
-                  resolve(value);
-                });
-          }
-          return new (P || (P = Promise))(function (resolve, reject) {
-            function fulfilled(value) {
-              try {
-                step(generator.next(value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-            function rejected(value) {
-              try {
-                step(generator['throw'](value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-            function step(result) {
-              result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
-            }
-            step((generator = generator.apply(thisArg, _arguments || [])).next());
-          });
-        };
-      var __importStar =
-        (this && this.__importStar) ||
-        function (mod) {
-          if (mod && mod.__esModule) return mod;
-          var result = {};
-          if (mod != null)
-            for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
-          result['default'] = mod;
-          return result;
-        };
-      Object.defineProperty(exports, '__esModule', { value: true });
-      const core = __importStar(__nccwpck_require__(2186));
-      const path = __importStar(__nccwpck_require__(5622));
-      const utils = __importStar(__nccwpck_require__(6701));
-      const cacheHttpClient = __importStar(__nccwpck_require__(5078));
-      const tar_1 = __nccwpck_require__(2154);
-      class ValidationError extends Error {
-        constructor(message) {
-          super(message);
-          this.name = 'ValidationError';
-          Object.setPrototypeOf(this, ValidationError.prototype);
-        }
-      }
-      exports.ValidationError = ValidationError;
-      class ReserveCacheError extends Error {
-        constructor(message) {
-          super(message);
-          this.name = 'ReserveCacheError';
-          Object.setPrototypeOf(this, ReserveCacheError.prototype);
-        }
-      }
-      exports.ReserveCacheError = ReserveCacheError;
-      function checkPaths(paths) {
-        if (!paths || paths.length === 0) {
-          throw new ValidationError(
-            `Path Validation Error: At least one directory or file path is required`
-          );
-        }
-      }
-      function checkKey(key) {
-        if (key.length > 512) {
-          throw new ValidationError(
-            `Key Validation Error: ${key} cannot be larger than 512 characters.`
-          );
-        }
-        const regex = /^[^,]*$/;
-        if (!regex.test(key)) {
-          throw new ValidationError(`Key Validation Error: ${key} cannot contain commas.`);
-        }
-      }
-      /**
-       * Get the cache entry from keys
-       *
-       * @param paths a list of file paths to restore from the cache
-       * @param primaryKey an explicit key for restoring the cache
-       * @param restoreKeys an optional ordered list of keys to use for restoring the cache if no cache hit occurred for key
-       * @param compressionMethod cache compression method
-       * @returns string returns the cache entry for the cache hit, otherwise returns null
-       */
-      function getCacheEntry(paths, primaryKey, restoreKeys, compressionMethod) {
-        return __awaiter(this, void 0, void 0, function* () {
-          checkPaths(paths);
-          restoreKeys = restoreKeys || [];
-          const keys = [primaryKey, ...restoreKeys];
-          core.debug('Resolved Keys:');
-          core.debug(JSON.stringify(keys));
-          if (keys.length > 10) {
-            throw new ValidationError(`Key Validation Error: Keys are limited to a maximum of 10.`);
-          }
-          for (const key of keys) {
-            checkKey(key);
-          }
-          // path are needed to compute version
-          return yield cacheHttpClient.getCacheEntry(keys, paths, {
-            compressionMethod:
-              compressionMethod !== null && compressionMethod !== void 0
-                ? compressionMethod
-                : yield utils.getCompressionMethod()
-          });
-        });
-      }
-      exports.getCacheEntry = getCacheEntry;
-      /**
-       * Restores cache from keys
-       *
-       * @param paths a list of file paths to restore from the cache
-       * @param primaryKey an explicit key for restoring the cache
-       * @param restoreKeys an optional ordered list of keys to use for restoring the cache if no cache hit occurred for key
-       * @param downloadOptions cache download options
-       * @returns string returns the key for the cache hit, otherwise returns undefined
-       */
-      function restoreCache(paths, primaryKey, restoreKeys, options) {
-        return __awaiter(this, void 0, void 0, function* () {
-          const compressionMethod = yield utils.getCompressionMethod();
-          const cacheEntry = yield getCacheEntry(paths, primaryKey, restoreKeys, compressionMethod);
-          if (
-            !(cacheEntry === null || cacheEntry === void 0 ? void 0 : cacheEntry.archiveLocation)
-          ) {
-            // Cache not found
-            return undefined;
-          }
-          const archivePath = path.join(
-            yield utils.createTempDirectory(),
-            utils.getCacheFileName(compressionMethod)
-          );
-          core.debug(`Archive Path: ${archivePath}`);
-          try {
-            // Download the cache from the cache entry
-            yield cacheHttpClient.downloadCache(cacheEntry.archiveLocation, archivePath, options);
-            if (core.isDebug()) {
-              yield tar_1.listTar(archivePath, compressionMethod);
-            }
-            const archiveFileSize = utils.getArchiveFileSizeInBytes(archivePath);
-            core.info(
-              `Cache Size: ~${Math.round(
-                archiveFileSize / (1024 * 1024)
-              )} MB (${archiveFileSize} B)`
-            );
-            yield tar_1.extractTar(archivePath, compressionMethod);
-            core.info('Cache restored successfully');
-          } finally {
-            // Try to delete the archive to save space
-            try {
-              yield utils.unlinkFile(archivePath);
-            } catch (error) {
-              core.debug(`Failed to delete archive: ${error}`);
-            }
-          }
-          return cacheEntry.cacheKey;
-        });
-      }
-      exports.restoreCache = restoreCache;
-      /**
-       * Saves a list of files with the specified key
-       *
-       * @param paths a list of file paths to be cached
-       * @param key an explicit key for restoring the cache
-       * @param options cache upload options
-       * @returns number returns cacheId if the cache was saved successfully and throws an error if save fails
-       */
-      function saveCache(paths, key, options) {
-        return __awaiter(this, void 0, void 0, function* () {
-          checkPaths(paths);
-          checkKey(key);
-          const compressionMethod = yield utils.getCompressionMethod();
-          core.debug('Reserving Cache');
-          const cacheId = yield cacheHttpClient.reserveCache(key, paths, {
-            compressionMethod
-          });
-          if (cacheId === -1) {
-            throw new ReserveCacheError(
-              `Unable to reserve cache with key ${key}, another job may be creating this cache.`
-            );
-          }
-          core.debug(`Cache ID: ${cacheId}`);
-          const cachePaths = yield utils.resolvePaths(paths);
-          core.debug('Cache Paths:');
-          core.debug(`${JSON.stringify(cachePaths)}`);
-          const archiveFolder = yield utils.createTempDirectory();
-          const archivePath = path.join(archiveFolder, utils.getCacheFileName(compressionMethod));
-          core.debug(`Archive Path: ${archivePath}`);
-          try {
-            yield tar_1.createTar(archiveFolder, cachePaths, compressionMethod);
-            if (core.isDebug()) {
-              yield tar_1.listTar(archivePath, compressionMethod);
-            }
-            const fileSizeLimit = 5 * 1024 * 1024 * 1024; // 5GB per repo limit
-            const archiveFileSize = utils.getArchiveFileSizeInBytes(archivePath);
-            core.debug(`File Size: ${archiveFileSize}`);
-            if (archiveFileSize > fileSizeLimit) {
-              throw new Error(
-                `Cache size of ~${Math.round(
-                  archiveFileSize / (1024 * 1024)
-                )} MB (${archiveFileSize} B) is over the 5GB limit, not saving cache.`
-              );
-            }
-            core.debug(`Saving Cache (ID: ${cacheId})`);
-            yield cacheHttpClient.saveCache(cacheId, archivePath, options);
-          } finally {
-            // Try to delete the archive to save space
-            try {
-              yield utils.unlinkFile(archivePath);
-            } catch (error) {
-              core.debug(`Failed to delete archive: ${error}`);
-            }
-          }
-          return cacheId;
-        });
-      }
-      exports.saveCache = saveCache;
-      //# sourceMappingURL=cache.js.map
-
-      /***/
-    },
-
-    /***/ 5078: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
-      'use strict';
-
-      var __awaiter =
-        (this && this.__awaiter) ||
-        function (thisArg, _arguments, P, generator) {
-          function adopt(value) {
-            return value instanceof P
-              ? value
-              : new P(function (resolve) {
-                  resolve(value);
-                });
-          }
-          return new (P || (P = Promise))(function (resolve, reject) {
-            function fulfilled(value) {
-              try {
-                step(generator.next(value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-            function rejected(value) {
-              try {
-                step(generator['throw'](value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-            function step(result) {
-              result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
-            }
-            step((generator = generator.apply(thisArg, _arguments || [])).next());
-          });
-        };
-      var __importStar =
-        (this && this.__importStar) ||
-        function (mod) {
-          if (mod && mod.__esModule) return mod;
-          var result = {};
-          if (mod != null)
-            for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
-          result['default'] = mod;
-          return result;
-        };
-      Object.defineProperty(exports, '__esModule', { value: true });
-      const core = __importStar(__nccwpck_require__(2186));
-      const http_client_1 = __nccwpck_require__(9925);
-      const auth_1 = __nccwpck_require__(3702);
-      const crypto = __importStar(__nccwpck_require__(6417));
-      const fs = __importStar(__nccwpck_require__(5747));
-      const url_1 = __nccwpck_require__(8835);
-      const utils = __importStar(__nccwpck_require__(6701));
-      const constants_1 = __nccwpck_require__(6180);
-      const downloadUtils_1 = __nccwpck_require__(7682);
-      const options_1 = __nccwpck_require__(1532);
-      const requestUtils_1 = __nccwpck_require__(5096);
-      const versionSalt = '1.0';
-      function getCacheApiUrl(resource) {
-        // Ideally we just use ACTIONS_CACHE_URL
-        const baseUrl = (
-          process.env['ACTIONS_CACHE_URL'] ||
-          process.env['ACTIONS_RUNTIME_URL'] ||
-          ''
-        ).replace('pipelines', 'artifactcache');
-        if (!baseUrl) {
-          throw new Error('Cache Service Url not found, unable to restore cache.');
-        }
-        const url = `${baseUrl}_apis/artifactcache/${resource}`;
-        core.debug(`Resource Url: ${url}`);
-        return url;
-      }
-      function createAcceptHeader(type, apiVersion) {
-        return `${type};api-version=${apiVersion}`;
-      }
-      function getRequestOptions() {
-        const requestOptions = {
-          headers: {
-            Accept: createAcceptHeader('application/json', '6.0-preview.1')
-          }
-        };
-        return requestOptions;
-      }
-      function createHttpClient() {
-        const token = process.env['ACTIONS_RUNTIME_TOKEN'] || '';
-        const bearerCredentialHandler = new auth_1.BearerCredentialHandler(token);
-        return new http_client_1.HttpClient(
-          'actions/cache',
-          [bearerCredentialHandler],
-          getRequestOptions()
-        );
-      }
-      function getCacheVersion(paths, compressionMethod) {
-        const components = paths.concat(
-          !compressionMethod || compressionMethod === constants_1.CompressionMethod.Gzip
-            ? []
-            : [compressionMethod]
-        );
-        // Add salt to cache version to support breaking changes in cache entry
-        components.push(versionSalt);
-        return crypto.createHash('sha256').update(components.join('|')).digest('hex');
-      }
-      exports.getCacheVersion = getCacheVersion;
-      function getCacheEntry(keys, paths, options) {
-        return __awaiter(this, void 0, void 0, function* () {
-          const httpClient = createHttpClient();
-          const version = getCacheVersion(
-            paths,
-            options === null || options === void 0 ? void 0 : options.compressionMethod
-          );
-          const resource = `cache?keys=${encodeURIComponent(keys.join(','))}&version=${version}`;
-          const response = yield requestUtils_1.retryTypedResponse('getCacheEntry', () =>
-            __awaiter(this, void 0, void 0, function* () {
-              return httpClient.getJson(getCacheApiUrl(resource));
-            })
-          );
-          if (response.statusCode === 204) {
-            return null;
-          }
-          if (!requestUtils_1.isSuccessStatusCode(response.statusCode)) {
-            throw new Error(`Cache service responded with ${response.statusCode}`);
-          }
-          const cacheResult = response.result;
-          const cacheDownloadUrl =
-            cacheResult === null || cacheResult === void 0 ? void 0 : cacheResult.archiveLocation;
-          if (!cacheDownloadUrl) {
-            throw new Error('Cache not found.');
-          }
-          core.setSecret(cacheDownloadUrl);
-          core.debug(`Cache Result:`);
-          core.debug(JSON.stringify(cacheResult));
-          return cacheResult;
-        });
-      }
-      exports.getCacheEntry = getCacheEntry;
-      function downloadCache(archiveLocation, archivePath, options) {
-        return __awaiter(this, void 0, void 0, function* () {
-          const archiveUrl = new url_1.URL(archiveLocation);
-          const downloadOptions = options_1.getDownloadOptions(options);
-          if (
-            downloadOptions.useAzureSdk &&
-            archiveUrl.hostname.endsWith('.blob.core.windows.net')
-          ) {
-            // Use Azure storage SDK to download caches hosted on Azure to improve speed and reliability.
-            yield downloadUtils_1.downloadCacheStorageSDK(
-              archiveLocation,
-              archivePath,
-              downloadOptions
-            );
-          } else {
-            // Otherwise, download using the Actions http-client.
-            yield downloadUtils_1.downloadCacheHttpClient(archiveLocation, archivePath);
-          }
-        });
-      }
-      exports.downloadCache = downloadCache;
-      // Reserve Cache
-      function reserveCache(key, paths, options) {
-        var _a, _b;
-        return __awaiter(this, void 0, void 0, function* () {
-          const httpClient = createHttpClient();
-          const version = getCacheVersion(
-            paths,
-            options === null || options === void 0 ? void 0 : options.compressionMethod
-          );
-          const reserveCacheRequest = {
-            key,
-            version
-          };
-          const response = yield requestUtils_1.retryTypedResponse('reserveCache', () =>
-            __awaiter(this, void 0, void 0, function* () {
-              return httpClient.postJson(getCacheApiUrl('caches'), reserveCacheRequest);
-            })
-          );
-          return (_b =
-            (_a = response === null || response === void 0 ? void 0 : response.result) === null ||
-            _a === void 0
-              ? void 0
-              : _a.cacheId) !== null && _b !== void 0
-            ? _b
-            : -1;
-        });
-      }
-      exports.reserveCache = reserveCache;
-      function getContentRange(start, end) {
-        // Format: `bytes start-end/filesize
-        // start and end are inclusive
-        // filesize can be *
-        // For a 200 byte chunk starting at byte 0:
-        // Content-Range: bytes 0-199/*
-        return `bytes ${start}-${end}/*`;
-      }
-      function uploadChunk(httpClient, resourceUrl, openStream, start, end) {
-        return __awaiter(this, void 0, void 0, function* () {
-          core.debug(
-            `Uploading chunk of size ${
-              end - start + 1
-            } bytes at offset ${start} with content range: ${getContentRange(start, end)}`
-          );
-          const additionalHeaders = {
-            'Content-Type': 'application/octet-stream',
-            'Content-Range': getContentRange(start, end)
-          };
-          const uploadChunkResponse = yield requestUtils_1.retryHttpClientResponse(
-            `uploadChunk (start: ${start}, end: ${end})`,
-            () =>
-              __awaiter(this, void 0, void 0, function* () {
-                return httpClient.sendStream('PATCH', resourceUrl, openStream(), additionalHeaders);
-              })
-          );
-          if (!requestUtils_1.isSuccessStatusCode(uploadChunkResponse.message.statusCode)) {
-            throw new Error(
-              `Cache service responded with ${uploadChunkResponse.message.statusCode} during upload chunk.`
-            );
-          }
-        });
-      }
-      function uploadFile(httpClient, cacheId, archivePath, options) {
-        return __awaiter(this, void 0, void 0, function* () {
-          // Upload Chunks
-          const fileSize = utils.getArchiveFileSizeInBytes(archivePath);
-          const resourceUrl = getCacheApiUrl(`caches/${cacheId.toString()}`);
-          const fd = fs.openSync(archivePath, 'r');
-          const uploadOptions = options_1.getUploadOptions(options);
-          const concurrency = utils.assertDefined(
-            'uploadConcurrency',
-            uploadOptions.uploadConcurrency
-          );
-          const maxChunkSize = utils.assertDefined(
-            'uploadChunkSize',
-            uploadOptions.uploadChunkSize
-          );
-          const parallelUploads = [...new Array(concurrency).keys()];
-          core.debug('Awaiting all uploads');
-          let offset = 0;
-          try {
-            yield Promise.all(
-              parallelUploads.map(() =>
-                __awaiter(this, void 0, void 0, function* () {
-                  while (offset < fileSize) {
-                    const chunkSize = Math.min(fileSize - offset, maxChunkSize);
-                    const start = offset;
-                    const end = offset + chunkSize - 1;
-                    offset += maxChunkSize;
-                    yield uploadChunk(
-                      httpClient,
-                      resourceUrl,
-                      () =>
-                        fs
-                          .createReadStream(archivePath, {
-                            fd,
-                            start,
-                            end,
-                            autoClose: false
-                          })
-                          .on('error', error => {
-                            throw new Error(
-                              `Cache upload failed because file read failed with ${error.message}`
-                            );
-                          }),
-                      start,
-                      end
-                    );
-                  }
-                })
-              )
-            );
-          } finally {
-            fs.closeSync(fd);
-          }
-          return;
-        });
-      }
-      function commitCache(httpClient, cacheId, filesize) {
-        return __awaiter(this, void 0, void 0, function* () {
-          const commitCacheRequest = { size: filesize };
-          return yield requestUtils_1.retryTypedResponse('commitCache', () =>
-            __awaiter(this, void 0, void 0, function* () {
-              return httpClient.postJson(
-                getCacheApiUrl(`caches/${cacheId.toString()}`),
-                commitCacheRequest
-              );
-            })
-          );
-        });
-      }
-      function saveCache(cacheId, archivePath, options) {
-        return __awaiter(this, void 0, void 0, function* () {
-          const httpClient = createHttpClient();
-          core.debug('Upload cache');
-          yield uploadFile(httpClient, cacheId, archivePath, options);
-          // Commit Cache
-          core.debug('Commiting cache');
-          const cacheSize = utils.getArchiveFileSizeInBytes(archivePath);
-          core.info(`Cache Size: ~${Math.round(cacheSize / (1024 * 1024))} MB (${cacheSize} B)`);
-          const commitCacheResponse = yield commitCache(httpClient, cacheId, cacheSize);
-          if (!requestUtils_1.isSuccessStatusCode(commitCacheResponse.statusCode)) {
-            throw new Error(
-              `Cache service responded with ${commitCacheResponse.statusCode} during commit cache.`
-            );
-          }
-          core.info('Cache saved successfully');
-        });
-      }
-      exports.saveCache = saveCache;
-      //# sourceMappingURL=cacheHttpClient.js.map
-
-      /***/
-    },
-
-    /***/ 6701: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
-      'use strict';
-
-      var __awaiter =
-        (this && this.__awaiter) ||
-        function (thisArg, _arguments, P, generator) {
-          function adopt(value) {
-            return value instanceof P
-              ? value
-              : new P(function (resolve) {
-                  resolve(value);
-                });
-          }
-          return new (P || (P = Promise))(function (resolve, reject) {
-            function fulfilled(value) {
-              try {
-                step(generator.next(value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-            function rejected(value) {
-              try {
-                step(generator['throw'](value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-            function step(result) {
-              result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
-            }
-            step((generator = generator.apply(thisArg, _arguments || [])).next());
-          });
-        };
-      var __asyncValues =
-        (this && this.__asyncValues) ||
-        function (o) {
-          if (!Symbol.asyncIterator) throw new TypeError('Symbol.asyncIterator is not defined.');
-          var m = o[Symbol.asyncIterator],
-            i;
-          return m
-            ? m.call(o)
-            : ((o = typeof __values === 'function' ? __values(o) : o[Symbol.iterator]()),
-              (i = {}),
-              verb('next'),
-              verb('throw'),
-              verb('return'),
-              (i[Symbol.asyncIterator] = function () {
-                return this;
-              }),
-              i);
-          function verb(n) {
-            i[n] =
-              o[n] &&
-              function (v) {
-                return new Promise(function (resolve, reject) {
-                  (v = o[n](v)), settle(resolve, reject, v.done, v.value);
-                });
-              };
-          }
-          function settle(resolve, reject, d, v) {
-            Promise.resolve(v).then(function (v) {
-              resolve({ value: v, done: d });
-            }, reject);
-          }
-        };
-      var __importStar =
-        (this && this.__importStar) ||
-        function (mod) {
-          if (mod && mod.__esModule) return mod;
-          var result = {};
-          if (mod != null)
-            for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
-          result['default'] = mod;
-          return result;
-        };
-      Object.defineProperty(exports, '__esModule', { value: true });
-      const core = __importStar(__nccwpck_require__(2186));
-      const exec = __importStar(__nccwpck_require__(1514));
-      const glob = __importStar(__nccwpck_require__(8090));
-      const io = __importStar(__nccwpck_require__(7436));
-      const fs = __importStar(__nccwpck_require__(5747));
-      const path = __importStar(__nccwpck_require__(5622));
-      const semver = __importStar(__nccwpck_require__(5911));
-      const util = __importStar(__nccwpck_require__(1669));
-      const uuid_1 = __nccwpck_require__(2155);
-      const constants_1 = __nccwpck_require__(6180);
-      // From https://github.com/actions/toolkit/blob/main/packages/tool-cache/src/tool-cache.ts#L23
-      function createTempDirectory() {
-        return __awaiter(this, void 0, void 0, function* () {
-          const IS_WINDOWS = process.platform === 'win32';
-          let tempDirectory = process.env['RUNNER_TEMP'] || '';
-          if (!tempDirectory) {
-            let baseLocation;
-            if (IS_WINDOWS) {
-              // On Windows use the USERPROFILE env variable
-              baseLocation = process.env['USERPROFILE'] || 'C:\\';
-            } else {
-              if (process.platform === 'darwin') {
-                baseLocation = '/Users';
-              } else {
-                baseLocation = '/home';
-              }
-            }
-            tempDirectory = path.join(baseLocation, 'actions', 'temp');
-          }
-          const dest = path.join(tempDirectory, uuid_1.v4());
-          yield io.mkdirP(dest);
-          return dest;
-        });
-      }
-      exports.createTempDirectory = createTempDirectory;
-      function getArchiveFileSizeInBytes(filePath) {
-        return fs.statSync(filePath).size;
-      }
-      exports.getArchiveFileSizeInBytes = getArchiveFileSizeInBytes;
-      function resolvePaths(patterns) {
-        var e_1, _a;
-        var _b;
-        return __awaiter(this, void 0, void 0, function* () {
-          const paths = [];
-          const workspace =
-            (_b = process.env['GITHUB_WORKSPACE']) !== null && _b !== void 0 ? _b : process.cwd();
-          const globber = yield glob.create(patterns.join('\n'), {
-            implicitDescendants: false
-          });
-          try {
-            for (
-              var _c = __asyncValues(globber.globGenerator()), _d;
-              (_d = yield _c.next()), !_d.done;
-
-            ) {
-              const file = _d.value;
-              const relativeFile = path
-                .relative(workspace, file)
-                .replace(new RegExp(`\\${path.sep}`, 'g'), '/');
-              core.debug(`Matched: ${relativeFile}`);
-              // Paths are made relative so the tar entries are all relative to the root of the workspace.
-              paths.push(`${relativeFile}`);
-            }
-          } catch (e_1_1) {
-            e_1 = { error: e_1_1 };
-          } finally {
-            try {
-              if (_d && !_d.done && (_a = _c.return)) yield _a.call(_c);
-            } finally {
-              if (e_1) throw e_1.error;
-            }
-          }
-          return paths;
-        });
-      }
-      exports.resolvePaths = resolvePaths;
-      function unlinkFile(filePath) {
-        return __awaiter(this, void 0, void 0, function* () {
-          return util.promisify(fs.unlink)(filePath);
-        });
-      }
-      exports.unlinkFile = unlinkFile;
-      function getVersion(app) {
-        return __awaiter(this, void 0, void 0, function* () {
-          core.debug(`Checking ${app} --version`);
-          let versionOutput = '';
-          try {
-            yield exec.exec(`${app} --version`, [], {
-              ignoreReturnCode: true,
-              silent: true,
-              listeners: {
-                stdout: data => (versionOutput += data.toString()),
-                stderr: data => (versionOutput += data.toString())
-              }
-            });
-          } catch (err) {
-            core.debug(err.message);
-          }
-          versionOutput = versionOutput.trim();
-          core.debug(versionOutput);
-          return versionOutput;
-        });
-      }
-      // Use zstandard if possible to maximize cache performance
-      function getCompressionMethod() {
-        return __awaiter(this, void 0, void 0, function* () {
-          if (process.platform === 'win32' && !(yield isGnuTarInstalled())) {
-            // Disable zstd due to bug https://github.com/actions/cache/issues/301
-            return constants_1.CompressionMethod.Gzip;
-          }
-          const versionOutput = yield getVersion('zstd');
-          const version = semver.clean(versionOutput);
-          if (!versionOutput.toLowerCase().includes('zstd command line interface')) {
-            // zstd is not installed
-            return constants_1.CompressionMethod.Gzip;
-          } else if (!version || semver.lt(version, 'v1.3.2')) {
-            // zstd is installed but using a version earlier than v1.3.2
-            // v1.3.2 is required to use the `--long` options in zstd
-            return constants_1.CompressionMethod.ZstdWithoutLong;
-          } else {
-            return constants_1.CompressionMethod.Zstd;
-          }
-        });
-      }
-      exports.getCompressionMethod = getCompressionMethod;
-      function getCacheFileName(compressionMethod) {
-        return compressionMethod === constants_1.CompressionMethod.Gzip
-          ? constants_1.CacheFilename.Gzip
-          : constants_1.CacheFilename.Zstd;
-      }
-      exports.getCacheFileName = getCacheFileName;
-      function isGnuTarInstalled() {
-        return __awaiter(this, void 0, void 0, function* () {
-          const versionOutput = yield getVersion('tar');
-          return versionOutput.toLowerCase().includes('gnu tar');
-        });
-      }
-      exports.isGnuTarInstalled = isGnuTarInstalled;
-      function assertDefined(name, value) {
-        if (value === undefined) {
-          throw Error(`Expected ${name} but value was undefiend`);
-        }
-        return value;
-      }
-      exports.assertDefined = assertDefined;
-      //# sourceMappingURL=cacheUtils.js.map
-
-      /***/
-    },
-
-    /***/ 6180: /***/ (__unused_webpack_module, exports) => {
-      'use strict';
-
-      Object.defineProperty(exports, '__esModule', { value: true });
-      var CacheFilename;
-      (function (CacheFilename) {
-        CacheFilename['Gzip'] = 'cache.tgz';
-        CacheFilename['Zstd'] = 'cache.tzst';
-      })((CacheFilename = exports.CacheFilename || (exports.CacheFilename = {})));
-      var CompressionMethod;
-      (function (CompressionMethod) {
-        CompressionMethod['Gzip'] = 'gzip';
-        // Long range mode was added to zstd in v1.3.2.
-        // This enum is for earlier version of zstd that does not have --long support
-        CompressionMethod['ZstdWithoutLong'] = 'zstd-without-long';
-        CompressionMethod['Zstd'] = 'zstd';
-      })((CompressionMethod = exports.CompressionMethod || (exports.CompressionMethod = {})));
-      // The default number of retry attempts.
-      exports.DefaultRetryAttempts = 2;
-      // The default delay in milliseconds between retry attempts.
-      exports.DefaultRetryDelay = 5000;
-      // Socket timeout in milliseconds during download.  If no traffic is received
-      // over the socket during this period, the socket is destroyed and the download
-      // is aborted.
-      exports.SocketTimeout = 5000;
-      //# sourceMappingURL=constants.js.map
-
-      /***/
-    },
-
-    /***/ 7682: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
-      'use strict';
-
-      var __awaiter =
-        (this && this.__awaiter) ||
-        function (thisArg, _arguments, P, generator) {
-          function adopt(value) {
-            return value instanceof P
-              ? value
-              : new P(function (resolve) {
-                  resolve(value);
-                });
-          }
-          return new (P || (P = Promise))(function (resolve, reject) {
-            function fulfilled(value) {
-              try {
-                step(generator.next(value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-            function rejected(value) {
-              try {
-                step(generator['throw'](value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-            function step(result) {
-              result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
-            }
-            step((generator = generator.apply(thisArg, _arguments || [])).next());
-          });
-        };
-      var __importStar =
-        (this && this.__importStar) ||
-        function (mod) {
-          if (mod && mod.__esModule) return mod;
-          var result = {};
-          if (mod != null)
-            for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
-          result['default'] = mod;
-          return result;
-        };
-      Object.defineProperty(exports, '__esModule', { value: true });
-      const core = __importStar(__nccwpck_require__(2186));
-      const http_client_1 = __nccwpck_require__(9925);
-      const storage_blob_1 = __nccwpck_require__(4100);
-      const buffer = __importStar(__nccwpck_require__(4293));
-      const fs = __importStar(__nccwpck_require__(5747));
-      const stream = __importStar(__nccwpck_require__(2413));
-      const util = __importStar(__nccwpck_require__(1669));
-      const utils = __importStar(__nccwpck_require__(6701));
-      const constants_1 = __nccwpck_require__(6180);
-      const requestUtils_1 = __nccwpck_require__(5096);
-      /**
-       * Pipes the body of a HTTP response to a stream
-       *
-       * @param response the HTTP response
-       * @param output the writable stream
-       */
-      function pipeResponseToStream(response, output) {
-        return __awaiter(this, void 0, void 0, function* () {
-          const pipeline = util.promisify(stream.pipeline);
-          yield pipeline(response.message, output);
-        });
-      }
-      /**
-       * Class for tracking the download state and displaying stats.
-       */
-      class DownloadProgress {
-        constructor(contentLength) {
-          this.contentLength = contentLength;
-          this.segmentIndex = 0;
-          this.segmentSize = 0;
-          this.segmentOffset = 0;
-          this.receivedBytes = 0;
-          this.displayedComplete = false;
-          this.startTime = Date.now();
-        }
-        /**
-         * Progress to the next segment. Only call this method when the previous segment
-         * is complete.
-         *
-         * @param segmentSize the length of the next segment
-         */
-        nextSegment(segmentSize) {
-          this.segmentOffset = this.segmentOffset + this.segmentSize;
-          this.segmentIndex = this.segmentIndex + 1;
-          this.segmentSize = segmentSize;
-          this.receivedBytes = 0;
-          core.debug(
-            `Downloading segment at offset ${this.segmentOffset} with length ${this.segmentSize}...`
-          );
-        }
-        /**
-         * Sets the number of bytes received for the current segment.
-         *
-         * @param receivedBytes the number of bytes received
-         */
-        setReceivedBytes(receivedBytes) {
-          this.receivedBytes = receivedBytes;
-        }
-        /**
-         * Returns the total number of bytes transferred.
-         */
-        getTransferredBytes() {
-          return this.segmentOffset + this.receivedBytes;
-        }
-        /**
-         * Returns true if the download is complete.
-         */
-        isDone() {
-          return this.getTransferredBytes() === this.contentLength;
-        }
-        /**
-         * Prints the current download stats. Once the download completes, this will print one
-         * last line and then stop.
-         */
-        display() {
-          if (this.displayedComplete) {
-            return;
-          }
-          const transferredBytes = this.segmentOffset + this.receivedBytes;
-          const percentage = (100 * (transferredBytes / this.contentLength)).toFixed(1);
-          const elapsedTime = Date.now() - this.startTime;
-          const downloadSpeed = (transferredBytes / (1024 * 1024) / (elapsedTime / 1000)).toFixed(
-            1
-          );
-          core.info(
-            `Received ${transferredBytes} of ${this.contentLength} (${percentage}%), ${downloadSpeed} MBs/sec`
-          );
-          if (this.isDone()) {
-            this.displayedComplete = true;
-          }
-        }
-        /**
-         * Returns a function used to handle TransferProgressEvents.
-         */
-        onProgress() {
-          return progress => {
-            this.setReceivedBytes(progress.loadedBytes);
-          };
-        }
-        /**
-         * Starts the timer that displays the stats.
-         *
-         * @param delayInMs the delay between each write
-         */
-        startDisplayTimer(delayInMs = 1000) {
-          const displayCallback = () => {
-            this.display();
-            if (!this.isDone()) {
-              this.timeoutHandle = setTimeout(displayCallback, delayInMs);
-            }
-          };
-          this.timeoutHandle = setTimeout(displayCallback, delayInMs);
-        }
-        /**
-         * Stops the timer that displays the stats. As this typically indicates the download
-         * is complete, this will display one last line, unless the last line has already
-         * been written.
-         */
-        stopDisplayTimer() {
-          if (this.timeoutHandle) {
-            clearTimeout(this.timeoutHandle);
-            this.timeoutHandle = undefined;
-          }
-          this.display();
-        }
-      }
-      exports.DownloadProgress = DownloadProgress;
-      /**
-       * Download the cache using the Actions toolkit http-client
-       *
-       * @param archiveLocation the URL for the cache
-       * @param archivePath the local path where the cache is saved
-       */
-      function downloadCacheHttpClient(archiveLocation, archivePath) {
-        return __awaiter(this, void 0, void 0, function* () {
-          const writeStream = fs.createWriteStream(archivePath);
-          const httpClient = new http_client_1.HttpClient('actions/cache');
-          const downloadResponse = yield requestUtils_1.retryHttpClientResponse(
-            'downloadCache',
-            () =>
-              __awaiter(this, void 0, void 0, function* () {
-                return httpClient.get(archiveLocation);
-              })
-          );
-          // Abort download if no traffic received over the socket.
-          downloadResponse.message.socket.setTimeout(constants_1.SocketTimeout, () => {
-            downloadResponse.message.destroy();
-            core.debug(`Aborting download, socket timed out after ${constants_1.SocketTimeout} ms`);
-          });
-          yield pipeResponseToStream(downloadResponse, writeStream);
-          // Validate download size.
-          const contentLengthHeader = downloadResponse.message.headers['content-length'];
-          if (contentLengthHeader) {
-            const expectedLength = parseInt(contentLengthHeader);
-            const actualLength = utils.getArchiveFileSizeInBytes(archivePath);
-            if (actualLength !== expectedLength) {
-              throw new Error(
-                `Incomplete download. Expected file size: ${expectedLength}, actual file size: ${actualLength}`
-              );
-            }
-          } else {
-            core.debug('Unable to validate download, no Content-Length header');
-          }
-        });
-      }
-      exports.downloadCacheHttpClient = downloadCacheHttpClient;
-      /**
-       * Download the cache using the Azure Storage SDK.  Only call this method if the
-       * URL points to an Azure Storage endpoint.
-       *
-       * @param archiveLocation the URL for the cache
-       * @param archivePath the local path where the cache is saved
-       * @param options the download options with the defaults set
-       */
-      function downloadCacheStorageSDK(archiveLocation, archivePath, options) {
-        var _a;
-        return __awaiter(this, void 0, void 0, function* () {
-          const client = new storage_blob_1.BlockBlobClient(archiveLocation, undefined, {
-            retryOptions: {
-              // Override the timeout used when downloading each 4 MB chunk
-              // The default is 2 min / MB, which is way too slow
-              tryTimeoutInMs: options.timeoutInMs
-            }
-          });
-          const properties = yield client.getProperties();
-          const contentLength = (_a = properties.contentLength) !== null && _a !== void 0 ? _a : -1;
-          if (contentLength < 0) {
-            // We should never hit this condition, but just in case fall back to downloading the
-            // file as one large stream
-            core.debug('Unable to determine content length, downloading file with http-client...');
-            yield downloadCacheHttpClient(archiveLocation, archivePath);
-          } else {
-            // Use downloadToBuffer for faster downloads, since internally it splits the
-            // file into 4 MB chunks which can then be parallelized and retried independently
-            //
-            // If the file exceeds the buffer maximum length (~1 GB on 32-bit systems and ~2 GB
-            // on 64-bit systems), split the download into multiple segments
-            const maxSegmentSize = buffer.constants.MAX_LENGTH;
-            const downloadProgress = new DownloadProgress(contentLength);
-            const fd = fs.openSync(archivePath, 'w');
-            try {
-              downloadProgress.startDisplayTimer();
-              while (!downloadProgress.isDone()) {
-                const segmentStart = downloadProgress.segmentOffset + downloadProgress.segmentSize;
-                const segmentSize = Math.min(maxSegmentSize, contentLength - segmentStart);
-                downloadProgress.nextSegment(segmentSize);
-                const result = yield client.downloadToBuffer(segmentStart, segmentSize, {
-                  concurrency: options.downloadConcurrency,
-                  onProgress: downloadProgress.onProgress()
-                });
-                fs.writeFileSync(fd, result);
-              }
-            } finally {
-              downloadProgress.stopDisplayTimer();
-              fs.closeSync(fd);
-            }
-          }
-        });
-      }
-      exports.downloadCacheStorageSDK = downloadCacheStorageSDK;
-      //# sourceMappingURL=downloadUtils.js.map
-
-      /***/
-    },
-
-    /***/ 5096: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
-      'use strict';
-
-      var __awaiter =
-        (this && this.__awaiter) ||
-        function (thisArg, _arguments, P, generator) {
-          function adopt(value) {
-            return value instanceof P
-              ? value
-              : new P(function (resolve) {
-                  resolve(value);
-                });
-          }
-          return new (P || (P = Promise))(function (resolve, reject) {
-            function fulfilled(value) {
-              try {
-                step(generator.next(value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-            function rejected(value) {
-              try {
-                step(generator['throw'](value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-            function step(result) {
-              result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
-            }
-            step((generator = generator.apply(thisArg, _arguments || [])).next());
-          });
-        };
-      var __importStar =
-        (this && this.__importStar) ||
-        function (mod) {
-          if (mod && mod.__esModule) return mod;
-          var result = {};
-          if (mod != null)
-            for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
-          result['default'] = mod;
-          return result;
-        };
-      Object.defineProperty(exports, '__esModule', { value: true });
-      const core = __importStar(__nccwpck_require__(2186));
-      const http_client_1 = __nccwpck_require__(9925);
-      const constants_1 = __nccwpck_require__(6180);
-      function isSuccessStatusCode(statusCode) {
-        if (!statusCode) {
-          return false;
-        }
-        return statusCode >= 200 && statusCode < 300;
-      }
-      exports.isSuccessStatusCode = isSuccessStatusCode;
-      function isServerErrorStatusCode(statusCode) {
-        if (!statusCode) {
-          return true;
-        }
-        return statusCode >= 500;
-      }
-      exports.isServerErrorStatusCode = isServerErrorStatusCode;
-      function isRetryableStatusCode(statusCode) {
-        if (!statusCode) {
-          return false;
-        }
-        const retryableStatusCodes = [
-          http_client_1.HttpCodes.BadGateway,
-          http_client_1.HttpCodes.ServiceUnavailable,
-          http_client_1.HttpCodes.GatewayTimeout
-        ];
-        return retryableStatusCodes.includes(statusCode);
-      }
-      exports.isRetryableStatusCode = isRetryableStatusCode;
-      function sleep(milliseconds) {
-        return __awaiter(this, void 0, void 0, function* () {
-          return new Promise(resolve => setTimeout(resolve, milliseconds));
-        });
-      }
-      function retry(
-        name,
-        method,
-        getStatusCode,
-        maxAttempts = constants_1.DefaultRetryAttempts,
-        delay = constants_1.DefaultRetryDelay,
-        onError = undefined
-      ) {
-        return __awaiter(this, void 0, void 0, function* () {
-          let errorMessage = '';
-          let attempt = 1;
-          while (attempt <= maxAttempts) {
-            let response = undefined;
-            let statusCode = undefined;
-            let isRetryable = false;
-            try {
-              response = yield method();
-            } catch (error) {
-              if (onError) {
-                response = onError(error);
-              }
-              isRetryable = true;
-              errorMessage = error.message;
-            }
-            if (response) {
-              statusCode = getStatusCode(response);
-              if (!isServerErrorStatusCode(statusCode)) {
-                return response;
-              }
-            }
-            if (statusCode) {
-              isRetryable = isRetryableStatusCode(statusCode);
-              errorMessage = `Cache service responded with ${statusCode}`;
-            }
-            core.debug(
-              `${name} - Attempt ${attempt} of ${maxAttempts} failed with error: ${errorMessage}`
-            );
-            if (!isRetryable) {
-              core.debug(`${name} - Error is not retryable`);
-              break;
-            }
-            yield sleep(delay);
-            attempt++;
-          }
-          throw Error(`${name} failed: ${errorMessage}`);
-        });
-      }
-      exports.retry = retry;
-      function retryTypedResponse(
-        name,
-        method,
-        maxAttempts = constants_1.DefaultRetryAttempts,
-        delay = constants_1.DefaultRetryDelay
-      ) {
-        return __awaiter(this, void 0, void 0, function* () {
-          return yield retry(
-            name,
-            method,
-            response => response.statusCode,
-            maxAttempts,
-            delay,
-            // If the error object contains the statusCode property, extract it and return
-            // an ITypedResponse<T> so it can be processed by the retry logic.
-            error => {
-              if (error instanceof http_client_1.HttpClientError) {
-                return {
-                  statusCode: error.statusCode,
-                  result: null,
-                  headers: {}
-                };
-              } else {
-                return undefined;
-              }
-            }
-          );
-        });
-      }
-      exports.retryTypedResponse = retryTypedResponse;
-      function retryHttpClientResponse(
-        name,
-        method,
-        maxAttempts = constants_1.DefaultRetryAttempts,
-        delay = constants_1.DefaultRetryDelay
-      ) {
-        return __awaiter(this, void 0, void 0, function* () {
-          return yield retry(
-            name,
-            method,
-            response => response.message.statusCode,
-            maxAttempts,
-            delay
-          );
-        });
-      }
-      exports.retryHttpClientResponse = retryHttpClientResponse;
-      //# sourceMappingURL=requestUtils.js.map
-
-      /***/
-    },
-
-    /***/ 2154: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
-      'use strict';
-
-      var __awaiter =
-        (this && this.__awaiter) ||
-        function (thisArg, _arguments, P, generator) {
-          function adopt(value) {
-            return value instanceof P
-              ? value
-              : new P(function (resolve) {
-                  resolve(value);
-                });
-          }
-          return new (P || (P = Promise))(function (resolve, reject) {
-            function fulfilled(value) {
-              try {
-                step(generator.next(value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-            function rejected(value) {
-              try {
-                step(generator['throw'](value));
-              } catch (e) {
-                reject(e);
-              }
-            }
-            function step(result) {
-              result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
-            }
-            step((generator = generator.apply(thisArg, _arguments || [])).next());
-          });
-        };
-      var __importStar =
-        (this && this.__importStar) ||
-        function (mod) {
-          if (mod && mod.__esModule) return mod;
-          var result = {};
-          if (mod != null)
-            for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
-          result['default'] = mod;
-          return result;
-        };
-      Object.defineProperty(exports, '__esModule', { value: true });
-      const exec_1 = __nccwpck_require__(1514);
-      const io = __importStar(__nccwpck_require__(7436));
-      const fs_1 = __nccwpck_require__(5747);
-      const path = __importStar(__nccwpck_require__(5622));
-      const utils = __importStar(__nccwpck_require__(6701));
-      const constants_1 = __nccwpck_require__(6180);
-      function getTarPath(args, compressionMethod) {
-        return __awaiter(this, void 0, void 0, function* () {
-          switch (process.platform) {
-            case 'win32': {
-              const systemTar = `${process.env['windir']}\\System32\\tar.exe`;
-              if (compressionMethod !== constants_1.CompressionMethod.Gzip) {
-                // We only use zstandard compression on windows when gnu tar is installed due to
-                // a bug with compressing large files with bsdtar + zstd
-                args.push('--force-local');
-              } else if (fs_1.existsSync(systemTar)) {
-                return systemTar;
-              } else if (yield utils.isGnuTarInstalled()) {
-                args.push('--force-local');
-              }
-              break;
-            }
-            case 'darwin': {
-              const gnuTar = yield io.which('gtar', false);
-              if (gnuTar) {
-                // fix permission denied errors when extracting BSD tar archive with GNU tar - https://github.com/actions/cache/issues/527
-                args.push('--delay-directory-restore');
-                return gnuTar;
-              }
-              break;
-            }
-            default:
-              break;
-          }
-          return yield io.which('tar', true);
-        });
-      }
-      function execTar(args, compressionMethod, cwd) {
-        return __awaiter(this, void 0, void 0, function* () {
-          try {
-            yield exec_1.exec(`"${yield getTarPath(args, compressionMethod)}"`, args, { cwd });
-          } catch (error) {
-            throw new Error(
-              `Tar failed with error: ${
-                error === null || error === void 0 ? void 0 : error.message
-              }`
-            );
-          }
-        });
-      }
-      function getWorkingDirectory() {
-        var _a;
-        return (_a = process.env['GITHUB_WORKSPACE']) !== null && _a !== void 0
-          ? _a
-          : process.cwd();
-      }
-      function extractTar(archivePath, compressionMethod) {
-        return __awaiter(this, void 0, void 0, function* () {
-          // Create directory to extract tar into
-          const workingDirectory = getWorkingDirectory();
-          yield io.mkdirP(workingDirectory);
-          // --d: Decompress.
-          // --long=#: Enables long distance matching with # bits. Maximum is 30 (1GB) on 32-bit OS and 31 (2GB) on 64-bit.
-          // Using 30 here because we also support 32-bit self-hosted runners.
-          function getCompressionProgram() {
-            switch (compressionMethod) {
-              case constants_1.CompressionMethod.Zstd:
-                return ['--use-compress-program', 'zstd -d --long=30'];
-              case constants_1.CompressionMethod.ZstdWithoutLong:
-                return ['--use-compress-program', 'zstd -d'];
-              default:
-                return ['-z'];
-            }
-          }
-          const args = [
-            ...getCompressionProgram(),
-            '-xf',
-            archivePath.replace(new RegExp(`\\${path.sep}`, 'g'), '/'),
-            '-P',
-            '-C',
-            workingDirectory.replace(new RegExp(`\\${path.sep}`, 'g'), '/')
-          ];
-          yield execTar(args, compressionMethod);
-        });
-      }
-      exports.extractTar = extractTar;
-      function createTar(archiveFolder, sourceDirectories, compressionMethod) {
-        return __awaiter(this, void 0, void 0, function* () {
-          // Write source directories to manifest.txt to avoid command length limits
-          const manifestFilename = 'manifest.txt';
-          const cacheFileName = utils.getCacheFileName(compressionMethod);
-          fs_1.writeFileSync(
-            path.join(archiveFolder, manifestFilename),
-            sourceDirectories.join('\n')
-          );
-          const workingDirectory = getWorkingDirectory();
-          // -T#: Compress using # working thread. If # is 0, attempt to detect and use the number of physical CPU cores.
-          // --long=#: Enables long distance matching with # bits. Maximum is 30 (1GB) on 32-bit OS and 31 (2GB) on 64-bit.
-          // Using 30 here because we also support 32-bit self-hosted runners.
-          // Long range mode is added to zstd in v1.3.2 release, so we will not use --long in older version of zstd.
-          function getCompressionProgram() {
-            switch (compressionMethod) {
-              case constants_1.CompressionMethod.Zstd:
-                return ['--use-compress-program', 'zstd -T0 --long=30'];
-              case constants_1.CompressionMethod.ZstdWithoutLong:
-                return ['--use-compress-program', 'zstd -T0'];
-              default:
-                return ['-z'];
-            }
-          }
-          const args = [
-            '--posix',
-            ...getCompressionProgram(),
-            '-cf',
-            cacheFileName.replace(new RegExp(`\\${path.sep}`, 'g'), '/'),
-            '-P',
-            '-C',
-            workingDirectory.replace(new RegExp(`\\${path.sep}`, 'g'), '/'),
-            '--files-from',
-            manifestFilename
-          ];
-          yield execTar(args, compressionMethod, archiveFolder);
-        });
-      }
-      exports.createTar = createTar;
-      function listTar(archivePath, compressionMethod) {
-        return __awaiter(this, void 0, void 0, function* () {
-          // --d: Decompress.
-          // --long=#: Enables long distance matching with # bits.
-          // Maximum is 30 (1GB) on 32-bit OS and 31 (2GB) on 64-bit.
-          // Using 30 here because we also support 32-bit self-hosted runners.
-          function getCompressionProgram() {
-            switch (compressionMethod) {
-              case constants_1.CompressionMethod.Zstd:
-                return ['--use-compress-program', 'zstd -d --long=30'];
-              case constants_1.CompressionMethod.ZstdWithoutLong:
-                return ['--use-compress-program', 'zstd -d'];
-              default:
-                return ['-z'];
-            }
-          }
-          const args = [
-            ...getCompressionProgram(),
-            '-tf',
-            archivePath.replace(new RegExp(`\\${path.sep}`, 'g'), '/'),
-            '-P'
-          ];
-          yield execTar(args, compressionMethod);
-        });
-      }
-      exports.listTar = listTar;
-      //# sourceMappingURL=tar.js.map
-
-      /***/
-    },
-
-    /***/ 1532: /***/ function (__unused_webpack_module, exports, __nccwpck_require__) {
-      'use strict';
-
-      var __importStar =
-        (this && this.__importStar) ||
-        function (mod) {
-          if (mod && mod.__esModule) return mod;
-          var result = {};
-          if (mod != null)
-            for (var k in mod) if (Object.hasOwnProperty.call(mod, k)) result[k] = mod[k];
-          result['default'] = mod;
-          return result;
-        };
-      Object.defineProperty(exports, '__esModule', { value: true });
-      const core = __importStar(__nccwpck_require__(2186));
-      /**
-       * Returns a copy of the upload options with defaults filled in.
-       *
-       * @param copy the original upload options
-       */
-      function getUploadOptions(copy) {
-        const result = {
-          uploadConcurrency: 4,
-          uploadChunkSize: 32 * 1024 * 1024
-        };
-        if (copy) {
-          if (typeof copy.uploadConcurrency === 'number') {
-            result.uploadConcurrency = copy.uploadConcurrency;
-          }
-          if (typeof copy.uploadChunkSize === 'number') {
-            result.uploadChunkSize = copy.uploadChunkSize;
-          }
-        }
-        core.debug(`Upload concurrency: ${result.uploadConcurrency}`);
-        core.debug(`Upload chunk size: ${result.uploadChunkSize}`);
-        return result;
-      }
-      exports.getUploadOptions = getUploadOptions;
-      /**
-       * Returns a copy of the download options with defaults filled in.
-       *
-       * @param copy the original download options
-       */
-      function getDownloadOptions(copy) {
-        const result = {
-          useAzureSdk: true,
-          downloadConcurrency: 8,
-          timeoutInMs: 30000
-        };
-        if (copy) {
-          if (typeof copy.useAzureSdk === 'boolean') {
-            result.useAzureSdk = copy.useAzureSdk;
-          }
-          if (typeof copy.downloadConcurrency === 'number') {
-            result.downloadConcurrency = copy.downloadConcurrency;
-          }
-          if (typeof copy.timeoutInMs === 'number') {
-            result.timeoutInMs = copy.timeoutInMs;
-          }
-        }
-        core.debug(`Use Azure SDK: ${result.useAzureSdk}`);
-        core.debug(`Download concurrency: ${result.downloadConcurrency}`);
-        core.debug(`Request timeout (ms): ${result.timeoutInMs}`);
-        return result;
-      }
-      exports.getDownloadOptions = getDownloadOptions;
-      //# sourceMappingURL=options.js.map
-
-      /***/
-    },
-
     /***/ 7171: /***/ (__unused_webpack_module, exports, __nccwpck_require__) => {
       'use strict';
 
@@ -45611,7 +45235,7 @@ PERFORMANCE OF THIS SOFTWARE.
       const global_utils_1 = __nccwpck_require__(5135);
       const NoopTextMapPropagator_1 = __nccwpck_require__(2368);
       const TextMapPropagator_1 = __nccwpck_require__(865);
-      const context_helpers_1 = __nccwpck_require__(8446);
+      const context_helpers_1 = __nccwpck_require__(7682);
       const utils_1 = __nccwpck_require__(8136);
       const diag_1 = __nccwpck_require__(1877);
       const API_NAME = 'propagation';
@@ -45776,7 +45400,7 @@ PERFORMANCE OF THIS SOFTWARE.
       /***/
     },
 
-    /***/ 8446: /***/ (__unused_webpack_module, exports, __nccwpck_require__) => {
+    /***/ 7682: /***/ (__unused_webpack_module, exports, __nccwpck_require__) => {
       'use strict';
 
       /*
@@ -64635,10 +64259,10 @@ PERFORMANCE OF THIS SOFTWARE.
     /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(2186);
     /* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_0___default =
       /*#__PURE__*/ __nccwpck_require__.n(_actions_core__WEBPACK_IMPORTED_MODULE_0__);
-    /* harmony import */ var _martijnhols_actions_cache__WEBPACK_IMPORTED_MODULE_1__ =
-      __nccwpck_require__(5977);
-    /* harmony import */ var _martijnhols_actions_cache__WEBPACK_IMPORTED_MODULE_1___default =
-      /*#__PURE__*/ __nccwpck_require__.n(_martijnhols_actions_cache__WEBPACK_IMPORTED_MODULE_1__);
+    /* harmony import */ var _actions_cache__WEBPACK_IMPORTED_MODULE_1__ =
+      __nccwpck_require__(7799);
+    /* harmony import */ var _actions_cache__WEBPACK_IMPORTED_MODULE_1___default =
+      /*#__PURE__*/ __nccwpck_require__.n(_actions_cache__WEBPACK_IMPORTED_MODULE_1__);
 
     function getInputAsArray(name, options) {
       return _actions_core__WEBPACK_IMPORTED_MODULE_0__
@@ -64675,12 +64299,11 @@ PERFORMANCE OF THIS SOFTWARE.
           _actions_core__WEBPACK_IMPORTED_MODULE_0__.getBooleanInput('required');
 
         try {
-          const cacheKey =
-            await _martijnhols_actions_cache__WEBPACK_IMPORTED_MODULE_1__.restoreCache(
-              cachePaths,
-              primaryKey,
-              restoreKeys
-            );
+          const cacheKey = await _actions_cache__WEBPACK_IMPORTED_MODULE_1__.restoreCache(
+            cachePaths,
+            primaryKey,
+            restoreKeys
+          );
           if (!cacheKey) {
             const message = `Cache not found for input keys: ${[primaryKey, ...restoreKeys].join(
               ', '
@@ -64710,10 +64333,7 @@ PERFORMANCE OF THIS SOFTWARE.
           if (isCacheRequired) {
             throw error;
           } else {
-            if (
-              error.name ===
-              _martijnhols_actions_cache__WEBPACK_IMPORTED_MODULE_1__.ValidationError.name
-            ) {
+            if (error.name === _actions_cache__WEBPACK_IMPORTED_MODULE_1__.ValidationError.name) {
               throw error;
             } else {
               _actions_core__WEBPACK_IMPORTED_MODULE_0__.info(`[warning]${error.message}`);

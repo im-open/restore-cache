@@ -41,55 +41,51 @@ If you need an action that saves a cache, check out the official [actions/cache]
 ```yml
 
 jobs:
-  setup-caches:
+  npm-cache:
     runs-on: ubuntu-20.04
     outputs:
       NPM_CACHE_KEY: ${{ env.NPM_CACHE_KEY }}
-      HAS_NPM_CACHE: ${{ steps.has-npm-cache.outputs.cache-hit }}
       
     steps:
       - uses: actions/checkout@v3
         
       - name: Set Cache Keys
-        run: echo "NPM_CACHE_KEY=node_modules-${{ hashFiles('package-lock.json', '**/package-lock.json') }}" >> $GITHUB_ENV
+        run: echo "NPM_CACHE_KEY=node_modules-${{ hashFiles('**/package-lock.json') }}" >> $GITHUB_ENV
           
       - name: Check for an npm cache
-        id: has-npm-cache
-        uses: im-open/check-for-cache@v1
+        id: has-cache
+        uses: actions/cache@v3
         with:
-          paths:  '**/node_modules'
+          path: '**/node_modules'
           key: ${{ env.NPM_CACHE_KEY }}
-      
-  create-npm-cache:
-    runs-on: ubuntu-20.04
-    needs: [ setup-caches ]
-    if: needs.setup-caches.outputs.HAS_NPM_CACHE == 'false'
-    steps:
-      - uses: actions/checkout@v3
-        
+          lookup-only: true
+          enableCrossOsArchive: true
+  
       # This action will upload the node_modules dir to the cache if the job completes successfully.
       # Subsequent jobs/workflow runs can use this cached copy if the package-lock.json hasn't changed
       # and they are also using a ubuntu-20.04 runner to restore the cache from.
-      - name: Setup caching for node_modules directory
-        uses: actions/cache@v2
-        id: module-cache
+      - name: Setup caching for node_modules directory if cache does not exist
+        if: steps.has-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v3
         with:
-          key: ${{ needs.set-cache-keys.outputs.NPM_MODULES_CACHE_KEY }}
+          key: ${{ env.NPM_CACHE_KEY }}
           path: '**/node_modules'
+          enableCrossOsArchive: true
 
-      - run: npm ci
+      - name: npm ci if cache does not exist
+        if: steps.has-cache.outputs.cache-hit != 'true'
+        run: npm ci
   
   jest:
     runs-on: ubuntu-20.04
-    needs: [ setup-caches, create-npm-cache ]
+    needs: [ npm-cache ]
     steps:
       - uses: actions/checkout@v3
         
-      - name: Download the node_modules folder from the cache
-        id: get-cached-node-modules
-        uses: im-open/restore-cache@v1.1.7
+      - name: Download npm cache
+        uses: im-open/restore-cache@v1.2.0
         with:
-          key: ${{ needs.set-cache-keys.outputs.NPM_MODULES_CACHE_KEY }}
+          key: ${{ needs.npm-cache.outputs.NPM_CACHE_KEY }}
           path: '**/node_modules'
 
       - name: Rebuild Node Modules
