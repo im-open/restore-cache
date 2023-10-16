@@ -1,3 +1,7 @@
+# Tests
+
+Force tests to run from a fork to see what happens
+
 # restore-cache
 
 This is a fork of [martijnhols/actions-cache] at version 3.0.4 but only contains a slimmed down version of the [restore] action.  
