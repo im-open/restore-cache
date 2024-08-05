@@ -37,6 +37,7 @@ If you need an action that saves a cache, check out the official [actions/cache]
 | `cache-hit`   | Flag indicating whether an exact match was found for the cache key | `true,false`    |
 | `primary-key` | The primary key that should be used when saving the cache.         |                 |
 
+
 ## Usage Examples
 
 ```yml
