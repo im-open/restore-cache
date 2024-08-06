@@ -1,6 +1,6 @@
 # restore-cache
 
-This is a fork of [martijnhols/actions-cache] at version 3.0.4 but only contains a slimmed down version of the [restore] action.  
+This is a fork of [martijnhols/actions-cache] at version 3.0.4 but only contains a slimmed down version of the [restore] action.
 
 This action will restore a cache but will not save the cache in a post-job step.
 
@@ -46,13 +46,13 @@ jobs:
     runs-on: ubuntu-20.04
     outputs:
       NPM_CACHE_KEY: ${{ env.NPM_CACHE_KEY }}
-      
+
     steps:
       - uses: actions/checkout@v3
-        
+
       - name: Set Cache Keys
         run: echo "NPM_CACHE_KEY=node_modules-${{ hashFiles('**/package-lock.json') }}" >> $GITHUB_ENV
-          
+
       - name: Check for an npm cache
         id: has-cache
         uses: actions/cache@v3
@@ -61,7 +61,7 @@ jobs:
           key: ${{ env.NPM_CACHE_KEY }}
           lookup-only: true
           enableCrossOsArchive: true
-  
+
       # This action will upload the node_modules dir to the cache if the job completes successfully.
       # Subsequent jobs/workflow runs can use this cached copy if the package-lock.json hasn't changed
       # and they are also using a ubuntu-20.04 runner to restore the cache from.
@@ -76,15 +76,15 @@ jobs:
       - name: npm ci if cache does not exist
         if: steps.has-cache.outputs.cache-hit != 'true'
         run: npm ci
-  
+
   jest:
     runs-on: ubuntu-20.04
     needs: [ npm-cache ]
     steps:
       - uses: actions/checkout@v3
-        
+
       - name: Download npm cache
-        uses: im-open/restore-cache@v1.2.0
+        uses: im-open/restore-cache@v1.3.0
         with:
           key: ${{ needs.npm-cache.outputs.NPM_CACHE_KEY }}
           path: '**/node_modules'
@@ -94,8 +94,8 @@ jobs:
 
       - name: jest test with coverage
         run: npm test -- --json --outputFile=jest-results.json --coverage
-      
-    
+
+
 ```
 
 ## Contributing
@@ -122,7 +122,7 @@ This repo uses [git-version-lite] in its workflows to examine commit messages to
 
 ### Source Code Changes
 
-The files and directories that are considered source code are listed in the `files-with-code` and `dirs-with-code` arguments in both the [build-and-review-pr] and [increment-version-on-merge] workflows.  
+The files and directories that are considered source code are listed in the `files-with-code` and `dirs-with-code` arguments in both the [build-and-review-pr] and [increment-version-on-merge] workflows.
 
 If a PR contains source code changes, the README.md should be updated with the latest action version and the action should be recompiled.  The [build-and-review-pr] workflow will ensure these steps are performed when they are required.  The workflow will provide instructions for completing these steps if the PR Author does not initially complete them.
 
@@ -143,7 +143,7 @@ If changes are made to the action's [source code], the [usage examples] section 
 
 ### Tests
 
-The build and review PR workflow includes tests which are linked to a status check. That status check needs to succeed before a PR is merged to the default branch.  The tests do not need special permissions, so they should succeed whether they come from a branch or a fork.  
+The build and review PR workflow includes tests which are linked to a status check. That status check needs to succeed before a PR is merged to the default branch.  The tests do not need special permissions, so they should succeed whether they come from a branch or a fork.
 
 ## Code of Conduct
 
