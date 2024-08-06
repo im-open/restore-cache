@@ -4,7 +4,7 @@
   "description": "Restore a cache without saving it post-job ",
   "main": "dist/index.js",
   "scripts": {
-    "build": "npm ci && ncc build -o dist src/main.js && npm run format && git add dist/*",
+    "build": "npm ci && npm install && ncc build -o dist src/main.js && npm run format && git add dist/*",
     "format": "prettier --write **/*.js",
     "format-check": "prettier --check **/*.js"
   },
